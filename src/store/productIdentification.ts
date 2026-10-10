@@ -3,8 +3,8 @@ import { defineStore } from "pinia"
 import { fetchGoodIdentificationTypes, fetchProductIdentificationSetting, storeProductIdentificationSetting } from "@/api/productIdentification"
 import { runProductSolrQuery, solrDocs } from "@/api/solr"
 import {
-  DEFAULT_PRODUCT_IDENTIFICATION_PREF, PRODUCT_DOCUMENT_IDENTIFIERS, type ProductIdentificationOption,
-  type ProductIdentificationPref, parseProductIdentificationPref
+  ALWAYS_OFFERED_IDENTIFICATION_TYPES, DEFAULT_PRODUCT_IDENTIFICATION_PREF, PRODUCT_DOCUMENT_IDENTIFIERS,
+  type ProductIdentificationOption, type ProductIdentificationPref, parseProductIdentificationPref
 } from "@/domain/product/identification"
 import logger from "@/logger"
 import { showToast } from "@/utils"
@@ -58,14 +58,18 @@ export const useProductIdentificationStore = defineStore("productIdentification"
         logger.error("Failed to fetch good identification types", error)
       }
 
-      const options = new Map([...PRODUCT_DOCUMENT_IDENTIFIERS, ...goodIdentificationTypes]
+      const options = new Map([...PRODUCT_DOCUMENT_IDENTIFIERS, ...ALWAYS_OFFERED_IDENTIFICATION_TYPES, ...goodIdentificationTypes]
         .filter((option) => option.goodIdentificationTypeId)
         .map((option) => [option.goodIdentificationTypeId, option]))
       this.productIdentificationOptions = [...options.values()]
     },
     async fetchSampleProducts() {
+      // A random sample across the catalog: the first documents in index order are often variants of
+      // one product, and a preview of only those says little about what other products show.
+      const sample = { query: "*:*", filter: ["docType:PRODUCT"], limit: 10 }
       try {
-        this.sampleProducts = solrDocs(await runProductSolrQuery({ query: "*:*", filter: ["docType:PRODUCT"], limit: 10 }))
+        this.sampleProducts = solrDocs(await runProductSolrQuery({ ...sample, sort: `random_${Date.now()} asc` })
+          .catch(() => runProductSolrQuery(sample)))
       } catch (error) {
         logger.error("Failed to fetch sample products", error)
         this.sampleProducts = []

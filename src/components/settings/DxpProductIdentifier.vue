@@ -58,9 +58,19 @@
         <ion-thumbnail slot="start">
           <DxpShopifyImg size="small" :src="sampleProduct.mainImageUrl" />
         </ion-thumbnail>
+        <!-- Shown the way product rows show it: without the primary identifier a row shows the product
+             name. A missing identifier is named, so it is not mistaken for a value. -->
         <ion-label>
-          {{ productIdentifierValue(productIdentificationPref.primaryId, sampleProduct) || sampleProduct.productId }}
-          <p>{{ productIdentifierValue(productIdentificationPref.secondaryId, sampleProduct) }}</p>
+          {{ samplePrimary || sampleName }}
+          <p v-if="sampleSecondary">
+            {{ sampleSecondary }}
+          </p>
+          <p v-if="!samplePrimary">
+            {{ translate("No {identifier} on this product, so rows show its name.", { identifier: identifierLabel(productIdentificationPref.primaryId) }) }}
+          </p>
+          <p v-if="productIdentificationPref.secondaryId && !sampleSecondary">
+            {{ translate("No {identifier} on this product.", { identifier: identifierLabel(productIdentificationPref.secondaryId) }) }}
+          </p>
         </ion-label>
         <ion-button
           slot="end"
@@ -86,6 +96,7 @@ import {
 import { shuffleOutline } from "ionicons/icons"
 import { computed, onMounted } from "vue"
 import Actions from "@/authorization/actions"
+import { productDisplayName } from "@/domain/normalize/product"
 import {
   type ProductIdentificationOption, type ProductIdentificationPref, productIdentifierValue
 } from "@/domain/product/identification"
@@ -100,6 +111,9 @@ const productIdentificationPref = computed(() => productIdentificationStore.getP
 const productIdentificationOptions = computed(() => productIdentificationStore.getProductIdentificationOptions)
 const sampleProduct = computed(() => productIdentificationStore.getCurrentSampleProduct as Record<string, any> | null)
 const canUpdate = computed(() => Boolean(productStoreId.value) && userStore.hasPermission(Actions.APP_PRODUCT_IDENTIFIER_UPDATE))
+const samplePrimary = computed(() => productIdentifierValue(productIdentificationPref.value.primaryId, sampleProduct.value))
+const sampleSecondary = computed(() => productIdentifierValue(productIdentificationPref.value.secondaryId, sampleProduct.value))
+const sampleName = computed(() => sampleProduct.value ? productDisplayName(sampleProduct.value as { productId: string }) : "")
 
 onMounted(() => {
   productIdentificationStore.prepareProductIdentifierOptions()
@@ -109,6 +123,12 @@ onMounted(() => {
 
 function optionLabel(option: ProductIdentificationOption) {
   return option.description ? translate(option.description) : option.goodIdentificationTypeId
+}
+
+function identifierLabel(identifierId: string) {
+  const option = productIdentificationOptions.value.find((candidate) => candidate.goodIdentificationTypeId === identifierId)
+
+  return option ? optionLabel(option) : identifierId
 }
 
 function updatePref(key: keyof ProductIdentificationPref, value: string) {

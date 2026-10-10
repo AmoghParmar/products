@@ -13,6 +13,12 @@ export interface ProductIdentificationOption {
 /** Same default the other AccxUI apps use when a ProductStore has no PRDT_IDEN_PREF. */
 export const DEFAULT_PRODUCT_IDENTIFICATION_PREF: ProductIdentificationPref = { primaryId: "SKU", secondaryId: "productId" }
 
+/** Identification types offered even when the type list leaves them out: SKU is the default primary
+ *  identifier but is not a child of HC_GOOD_ID_TYPE, so without this it could not be chosen again. */
+export const ALWAYS_OFFERED_IDENTIFICATION_TYPES: ProductIdentificationOption[] = [
+  { goodIdentificationTypeId: "SKU", description: "SKU" }
+]
+
 /** Product document fields offered next to the good identification types, as in the other apps. */
 export const PRODUCT_DOCUMENT_IDENTIFIERS: ProductIdentificationOption[] = [
   { goodIdentificationTypeId: "productId", description: "Product ID" },
