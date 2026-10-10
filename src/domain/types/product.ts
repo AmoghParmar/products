@@ -1,7 +1,12 @@
 /** Core product domain types. Pure data shapes — no Vue, no transport. */
 
 export type ProductKind = "All" | "Variants" | "Virtuals"
-export type ProductSortOption = "Alphabet" | "Updated" | "Created"
+export type ProductSortOption =
+  "IntroducedDesc" | "IntroducedAsc" |
+  "UpdatedDesc" | "UpdatedAsc" |
+  "NameAsc" | "NameDesc" | "Family" |
+  "SkuAsc" | "SkuDesc" |
+  "PriceDesc" | "PriceAsc"
 
 /** Workbench filter state; doubles as the search query-key payload. */
 export interface ProductSearchParams {
@@ -13,6 +18,8 @@ export interface ProductSearchParams {
   groupIds: string[]
   sort: ProductSortOption
   pageSize: number
+  /** Solr field holding the list price for the store in scope; only set for a price sort. */
+  priceField?: string
 }
 
 /** A product row as indexed in the PIM Solr core (flat document, pim owns the shape). */

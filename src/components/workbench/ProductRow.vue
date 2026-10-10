@@ -1,16 +1,22 @@
 <template>
+  <!-- In select mode a tap selects the row instead of opening the product, as on the Order Manager find pages.
+       The key re-creates the item on a mode change: Ionic keeps the href of a removed router-link. -->
   <ion-item
-    :router-link="resolvedRouterLink"
-    :detail="!!resolvedRouterLink"
+    :key="selectMode ? 'select' : 'link'"
+    :router-link="selectMode ? undefined : resolvedRouterLink"
+    :detail="!selectMode && !!resolvedRouterLink"
+    :button="selectMode"
     lines="full"
+    @click="selectMode && $emit('selectionChange', !selected)"
   >
     <ion-checkbox
-      v-if="selectable"
+      v-if="selectMode"
       slot="start"
       :checked="selected"
-      aria-label="Select product"
-      @ion-change="$emit('toggleSelect')"
+      :aria-label="translate('Select product')"
       @click.stop
+      @keydown.stop
+      @ion-change="$emit('selectionChange', $event.detail.checked)"
     />
     <ion-thumbnail slot="start">
       <DxpShopifyImg
@@ -101,17 +107,17 @@ const props = withDefaults(
   defineProps<{
     product: ProductSummary
     routerLink?: string | import("vue-router").RouteLocationRaw
-    selectable?: boolean
+    selectMode?: boolean
     selected?: boolean
     maxTags?: number
     variantCounts?: Record<string, number>
     spark?: RowSalesSpark
     sparkMax?: number
   }>(),
-  { routerLink: undefined, selectable: false, selected: false, maxTags: 8, variantCounts: () => ({}), spark: undefined, sparkMax: 0 }
+  { routerLink: undefined, selectMode: false, selected: false, maxTags: 8, variantCounts: () => ({}), spark: undefined, sparkMax: 0 }
 )
 
-defineEmits<{ (event: "toggleSelect"): void }>()
+defineEmits<{ (event: "selectionChange", selected: boolean): void }>()
 
 const resolvedRouterLink = computed(() => {
   if(!props.routerLink) {return undefined}

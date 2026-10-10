@@ -1,24 +1,44 @@
-import { computed } from "vue"
-import { storeToRefs } from "pinia"
 import { useInfiniteQuery, useQuery } from "@tanstack/vue-query"
-import { groupIdFacetsOptions, rowSalesAnalyticsOptions, tagFacetsOptions, workbenchSearchOptions } from "@/queries/products"
+import { storeToRefs } from "pinia"
+import { computed } from "vue"
+import { PRODUCT_SORT_CHOICES } from "@/domain/product/sort"
+import { DEFAULT_PRODUCT_SORT, isPriceSort, listPriceField } from "@/domain/solr/productQuery"
 import { productStoresOptions, productTypesOptions } from "@/queries/catalog"
+import { groupIdFacetsOptions, rowSalesAnalyticsOptions, tagFacetsOptions, workbenchSearchOptions } from "@/queries/products"
+import { useUserStore } from "@/store/user"
 import { useWorkbenchStore } from "@/stores/workbench"
 
 /** Page facade for the workbench: wires filter state (Pinia) to the search/facet queries (TanStack)
  *  and exposes exactly what the view renders. Views import THIS, never api/queries directly. */
 export function useProductWorkbench() {
   const workbench = useWorkbenchStore()
-  const { queryString, productTypeId, productKind, productStoreId, tags, groupIds, sort, selectedProductIds } = storeToRefs(workbench)
+  const userStore = useUserStore()
+  const { queryString, productTypeId, productKind, productStoreId, tags, groupIds, sort } = storeToRefs(workbench)
 
-  const searchParams = computed(() => workbench.searchParams)
+  // Prices are indexed per store group and currency: the filtered store's, or the app's current store.
+  const priceStore = computed(() => productStoreId.value === "All"
+    ? userStore.getCurrentProductStore
+    : (userStore.getUserProfile?.stores ?? []).find((store: any) => store.productStoreId === productStoreId.value))
+  const priceField = computed(() => listPriceField(
+    priceStore.value?.primaryStoreGroupId,
+    priceStore.value?.defaultCurrencyUomId || priceStore.value?.currencyUomId
+  ))
+  const sortChoices = computed(() => PRODUCT_SORT_CHOICES.filter((choice) => priceField.value || !isPriceSort(choice.value)))
+  // A price sort with no store price to sort by shows, and runs, as the default order.
+  const activeSort = computed(() => isPriceSort(sort.value) && !priceField.value ? DEFAULT_PRODUCT_SORT : sort.value)
+
+  const searchParams = computed(() => ({
+    ...workbench.searchParams,
+    sort: activeSort.value,
+    ...(isPriceSort(activeSort.value) ? { priceField: priceField.value } : {})
+  }))
 
   const searchQuery = useInfiniteQuery(computed(() => workbenchSearchOptions(searchParams.value)))
-  const tagFacetsQuery = useQuery(computed(() => tagFacetsOptions(searchParams.value)))
+  const tagFacetsQuery = useQuery(computed(() => tagFacetsOptions(workbench.searchParams)))
   const productTypesQuery = useQuery(productTypesOptions())
   const productStoresQuery = useQuery(productStoresOptions())
 
-  const groupIdFacetsQuery = useQuery(computed(() => groupIdFacetsOptions(searchParams.value)))
+  const groupIdFacetsQuery = useQuery(computed(() => groupIdFacetsOptions(workbench.searchParams)))
 
   const products = computed(() => searchQuery.data.value?.pages.flatMap((page) => page.products) ?? [])
   const visibleProductIds = computed(() => products.value.map((product) => product.productId))
@@ -29,8 +49,6 @@ export function useProductWorkbench() {
     ...Object.values(rowSales.value).flatMap((spark) => spark.series)
   ))
   const total = computed(() => searchQuery.data.value?.pages[0]?.total ?? 0)
-  const selectedSet = computed(() => new Set(selectedProductIds.value))
-  const allVisibleSelected = computed(() => products.value.length > 0 && products.value.every((product) => selectedSet.value.has(product.productId)))
 
   const loadMore = async (done: () => void) => {
     try {
@@ -42,16 +60,16 @@ export function useProductWorkbench() {
     }
   }
 
-  const toggleSelectAll = () => {
-    if(allVisibleSelected.value) {workbench.clearSelection()} else {workbench.selectAll(products.value.map((product) => product.productId))}
-  }
-
   return {
     // filter state (v-model targets)
-    queryString, productTypeId, productKind, productStoreId, tags, groupIds, sort,
+    queryString, productTypeId, productKind, productStoreId, tags, groupIds,
     clearFilters: () => workbench.clearFilters(),
     toggleTag: (tag: string) => workbench.toggleTag(tag),
     toggleGroupId: (groupId: string) => workbench.toggleGroupId(groupId),
+
+    // sort
+    sort: computed({ get: () => activeSort.value, set: (value) => { sort.value = value } }),
+    sortChoices,
 
     // results
     products, rowSales, rowSalesMax, total,
@@ -67,11 +85,6 @@ export function useProductWorkbench() {
     tagFacets: computed(() => tagFacetsQuery.data.value ?? []),
     groupIdFacets: computed(() => groupIdFacetsQuery.data.value ?? {}),
     productTypes: computed(() => productTypesQuery.data.value ?? []),
-    productStores: computed(() => productStoresQuery.data.value ?? []),
-
-    // selection
-    selectedProductIds, selectedSet, allVisibleSelected, toggleSelectAll,
-    toggleSelected: (productId: string) => workbench.toggleSelected(productId),
-    clearSelection: () => workbench.clearSelection()
+    productStores: computed(() => productStoresQuery.data.value ?? [])
   }
 }

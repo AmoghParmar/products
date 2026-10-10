@@ -51,43 +51,44 @@
 
       <ion-list v-if="!isError">
         <ion-list-header>
-          <ion-label>{{ resultsLabel }}</ion-label>
+          <!-- ion-list-header lays out its children in its own shadow DOM, so this div holds the layout. -->
+          <div class="results-header">
+            <span class="results-header-start">
+              <ion-checkbox
+                v-if="selectMode"
+                :checked="allLoadedSelected"
+                :indeterminate="someLoadedSelected && !allLoadedSelected"
+                :aria-label="translate('Select all loaded products')"
+                @ion-change="toggleLoadedSelection($event.detail.checked)"
+              />
+            </span>
+            <ion-label>
+              <ion-skeleton-text
+                v-if="isLoading"
+                animated
+                class="results-header-skeleton"
+              />
+              <template v-else>
+                {{ resultsLabel }}
+              </template>
+            </ion-label>
+            <div class="results-header-controls">
+              <SortPopover
+                v-model="sort"
+                :options="sortChoices"
+                trigger-id="workbench-sort-trigger"
+              />
+              <ion-button
+                v-if="products.length || selectMode"
+                fill="clear"
+                size="small"
+                @click="toggleSelectMode"
+              >
+                {{ selectMode ? translate("Done") : translate("Select") }}
+              </ion-button>
+            </div>
+          </div>
         </ion-list-header>
-
-        <ion-item lines="full">
-          <ion-checkbox
-            slot="start"
-            :checked="allVisibleSelected"
-            :indeterminate="selectedProductIds.length > 0 && !allVisibleSelected"
-            aria-label="Select all"
-            @ion-change="toggleSelectAll"
-          />
-          <ion-label>
-            {{ selectedProductIds.length ? `${selectedProductIds.length} ${translate("selected")}` : translate("Select all") }}
-          </ion-label>
-          <ion-button
-            v-if="selectedProductIds.length"
-            slot="end"
-            fill="clear"
-            size="small"
-            @click="onAddTagToSelected"
-          >
-            <ion-icon
-              slot="start"
-              :icon="pricetagOutline"
-            />
-            {{ translate("Add tag") }}
-          </ion-button>
-          <ion-button
-            v-if="selectedProductIds.length"
-            slot="end"
-            fill="clear"
-            size="small"
-            @click="clearSelection"
-          >
-            {{ translate("Clear") }}
-          </ion-button>
-        </ion-item>
 
         <template v-if="isLoading">
           <ion-item
@@ -124,9 +125,9 @@
             :variant-counts="groupIdFacets"
             :spark="rowSales[product.productId]"
             :spark-max="rowSalesMax"
-            selectable
-            :selected="selectedSet.has(product.productId)"
-            @toggle-select="toggleSelected(product.productId)"
+            :select-mode="selectMode"
+            :selected="selectedProductIds.includes(product.productId)"
+            @selection-change="setProductSelection(product.productId, $event)"
           />
           <EmptyState
             v-if="!products.length"
@@ -147,7 +148,10 @@
         :disabled="!hasNextPage"
         @ion-infinite="onInfinite"
       >
-        <ion-infinite-scroll-content loading-spinner="crescent" />
+        <ion-infinite-scroll-content
+          loading-spinner="crescent"
+          :loading-text="translate('Loading more products')"
+        />
       </ion-infinite-scroll>
 
       <TagFilterModal
@@ -165,26 +169,44 @@
         @dismiss="isAddTagModalOpen = false"
       />
     </ion-content>
+
+    <ion-footer v-if="selectMode">
+      <ion-toolbar>
+        <ion-title size="small">
+          {{ translate("{count} selected", { count: selectedProductIds.length }) }}
+        </ion-title>
+        <ion-buttons slot="end">
+          <ion-button
+            fill="outline"
+            :disabled="!selectedProductIds.length"
+            @click="isAddTagModalOpen = true"
+          >
+            {{ translate("Add tag") }}
+          </ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-footer>
   </ion-page>
 </template>
 
 <script setup lang="ts">
+import { translate } from "@common"
 import {
-  IonButton, IonButtons, IonCheckbox, IonChip, IonContent, IonHeader, IonIcon, IonInfiniteScroll, IonInfiniteScrollContent,
-  IonItem, IonLabel, IonList, IonListHeader, IonMenuButton, IonPage, IonProgressBar,
+  IonButton, IonButtons, IonCheckbox, IonChip, IonContent, IonFooter, IonHeader, IonIcon, IonInfiniteScroll,
+  IonInfiniteScrollContent, IonItem, IonLabel, IonList, IonListHeader, IonMenuButton, IonPage, IonProgressBar,
   IonSkeletonText, IonThumbnail, IonTitle, IonToolbar, loadingController
 } from "@ionic/vue"
-import { addOutline, closeOutline, pricetagOutline } from "ionicons/icons"
-import { computed, ref } from "vue"
-import { translate } from "@common"
-import EmptyState from "@/components/EmptyState.vue"
-import ErrorState from "@/components/ErrorState.vue"
-import ProductRow from "@/components/workbench/ProductRow.vue"
-import AddTagModal from "@/components/workbench/AddTagModal.vue"
-import TagFilterModal from "@/components/workbench/TagFilterModal.vue"
-import WorkbenchFilters from "@/components/workbench/WorkbenchFilters.vue"
+import { addOutline, closeOutline } from "ionicons/icons"
+import { computed, ref, watch } from "vue"
 import { errorMessage } from "@/api/http"
 import { addProductKeyword, triggerSolrIndex } from "@/api/pim"
+import EmptyState from "@/components/EmptyState.vue"
+import ErrorState from "@/components/ErrorState.vue"
+import SortPopover from "@/components/SortPopover.vue"
+import AddTagModal from "@/components/workbench/AddTagModal.vue"
+import ProductRow from "@/components/workbench/ProductRow.vue"
+import TagFilterModal from "@/components/workbench/TagFilterModal.vue"
+import WorkbenchFilters from "@/components/workbench/WorkbenchFilters.vue"
 import { useProductWorkbench } from "@/composables/useProductWorkbench"
 import { useToast } from "@/composables/useToast"
 import { familyRouteFor } from "@/domain/product/family"
@@ -192,47 +214,79 @@ import { familyRouteFor } from "@/domain/product/family"
 const {
   queryString, productTypeId, productKind, groupIdFacets, productStoreId, tags,
   clearFilters, toggleTag,
+  sort, sortChoices,
   products, rowSales, rowSalesMax, total, isLoading, isFetching, isError, error, hasNextPage, loadMore, refetch,
-  tagFacets, productTypes, productStores,
-  selectedProductIds, selectedSet, allVisibleSelected, toggleSelectAll, toggleSelected, clearSelection
+  tagFacets, productTypes, productStores
 } = useProductWorkbench()
 
 const isTagModalOpen = ref(false)
 const isAddTagModalOpen = ref(false)
+const selectMode = ref(false)
+const selectedProductIds = ref<string[]>([])
 const toast = useToast()
 
-const resultsLabel = computed(() =>
-  total.value === 1 ? translate("1 result") : `${total.value} ${translate("results")}`)
+const resultsLabel = computed(() => total.value
+  ? translate("{shown} of {count} matching products", { shown: products.value.length, count: total.value })
+  : translate("0 results"))
 const errorText = computed(() => errorMessage(error.value, translate("Search is unavailable")))
 
-const onInfinite = (event: CustomEvent) => loadMore(() => (event.target as any)?.complete())
+const loadedProductIds = computed(() => products.value.map((product) => product.productId))
+const allLoadedSelected = computed(() => loadedProductIds.value.length > 0 && loadedProductIds.value.every((productId) => selectedProductIds.value.includes(productId)))
+const someLoadedSelected = computed(() => loadedProductIds.value.some((productId) => selectedProductIds.value.includes(productId)))
 
-const onAddTagToSelected = () => {
-  isAddTagModalOpen.value = true
+// Selection covers the loaded rows: a new search, filter or sort drops what is no longer shown.
+watch(loadedProductIds, (current) => {
+  const shown = new Set(current)
+  selectedProductIds.value = selectedProductIds.value.filter((productId) => shown.has(productId))
+})
+
+function toggleSelectMode() {
+  selectMode.value = !selectMode.value
+  if(!selectMode.value) {selectedProductIds.value = []}
 }
 
-const onTagSelected = async (tags: string[]) => {
+function exitSelectMode() {
+  selectMode.value = false
+  selectedProductIds.value = []
+}
+
+function toggleLoadedSelection(checked: boolean) {
+  selectedProductIds.value = checked ? [...loadedProductIds.value] : []
+}
+
+function setProductSelection(productId: string, checked: boolean) {
+  if(checked) {
+    if(!selectedProductIds.value.includes(productId)) {selectedProductIds.value = [...selectedProductIds.value, productId]}
+
+    return
+  }
+  selectedProductIds.value = selectedProductIds.value.filter((selectedId) => selectedId !== productId)
+}
+
+const onInfinite = (event: CustomEvent) => loadMore(() => (event.target as HTMLIonInfiniteScrollElement).complete())
+
+const onTagSelected = async (selectedTags: string[]) => {
   isAddTagModalOpen.value = false
   const ids = [...selectedProductIds.value]
   let failed = 0
   for(const productId of ids) {
-    for(const tag of tags) {
+    let productFailed = false
+    for(const tag of selectedTags) {
       try {
         await addProductKeyword(productId, tag)
       } catch {
-        failed++
+        productFailed = true
       }
     }
+    if(productFailed) {failed++}
     triggerSolrIndex(productId)
   }
   if(failed) {
-    toast.error(null, translate(`Could not add tag to ${failed} product(s)`))
+    toast.error(null, translate("Could not add tags to {failed} of {count} products", { failed, count: ids.length }))
   } else {
-    const tagLabel = tags.length > 1 ? `${tags.length} tags` : "Tag"
-
-    toast.success(translate(`${tagLabel} added to ${ids.length} product(s)`))
+    toast.success(translate("Added tags to {count} products", { count: ids.length }))
   }
-  clearSelection()
+  exitSelectMode()
 
   const loading = await loadingController.create({ message: translate("Updating products...") })
   await loading.present()
@@ -248,5 +302,33 @@ const onTagSelected = async (tags: string[]) => {
   flex-wrap: wrap;
   gap: 4px;
   padding: 0 16px;
+}
+
+/* Count, then sort and Select. At phone width the controls wrap below the count. */
+.results-header {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacer-xs);
+  width: 100%;
+}
+
+.results-header ion-label {
+  flex: 1 1 auto;
+}
+
+.results-header-controls {
+  align-items: center;
+  display: flex;
+  margin-inline-start: auto;
+}
+
+.results-header-start {
+  display: flex;
+  min-width: 24px;
+}
+
+.results-header-skeleton {
+  width: 40%;
 }
 </style>

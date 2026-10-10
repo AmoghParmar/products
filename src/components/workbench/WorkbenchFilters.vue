@@ -2,6 +2,7 @@
   <SearchFilterCard
     :model-value="queryString"
     :placeholder="translate('Product ID, SKU, UPC, name')"
+    :debounce="300"
     @update:model-value="$emit('update:queryString', $event)"
     @clear="$emit('clear')"
   >
