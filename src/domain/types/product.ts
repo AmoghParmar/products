@@ -183,6 +183,12 @@ export interface ProductCategory {
   description: string
 }
 
+/** What the category picker saves: categories newly checked, and the IDs of ones unchecked. */
+export interface CategoryPickerResult {
+  added: ProductCategory[]
+  removedCategoryIds: string[]
+}
+
 export interface ProductPrice {
   productPriceTypeId: string
   productPricePurposeId: string
@@ -238,6 +244,14 @@ export interface ImportHistoryEntry {
 }
 
 export type PresellState = "preorder" | "backorder" | null
+
+export interface ShopifyShop {
+  shopId: string
+  name: string
+  domain: string
+  /** The shop's main app connection (SystemMessageRemote) for Shopify queries; "" when it has none. */
+  remoteId: string
+}
 
 export interface ShopifyShopProduct {
   shopId: string
