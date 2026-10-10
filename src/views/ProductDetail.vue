@@ -151,9 +151,12 @@
 
         <ShopifyShopProductsCard
           :shopify-shop-products="shopifyShopProducts"
+          :product-id="editingProductId"
+          :product="shopifyListingProduct"
           :saving="shopifyMutations.upsert.isPending.value || shopifyMutations.remove.isPending.value"
           :can-edit="canEditProduct"
           @upsert="onUpsertShopifyShopProduct"
+          @replace="onReplaceShopifyShopProduct"
           @remove="onRemoveShopifyShopProduct"
         />
 
@@ -254,7 +257,7 @@ import { useAssociationMutations } from "@/mutations/useAssociationMutations"
 import { useFeatureMutations } from "@/mutations/useFeatureMutations"
 import { useTagMutations } from "@/mutations/useTagMutations"
 import { useCategoryMutations } from "@/mutations/useCategoryMutations"
-import { useShopifyShopProductMutations } from "@/mutations/useShopifyShopProductMutations"
+import { type ShopifyLinkKey, type ShopifyLinkPayload, useShopifyShopProductMutations } from "@/mutations/useShopifyShopProductMutations"
 import { triggerSolrIndex, updateProductFields } from "@/api/pim"
 import { useToast } from "@/composables/useToast"
 import { featureTypesOptions, identificationTypesOptions, lengthUomOptions, weightUomOptions } from "@/queries/catalog"
@@ -437,13 +440,23 @@ const onExpireCategory = (mem: ProductCategoryMembership) => {
 }
 
 // ---------- shopify shop products ----------
-const onUpsertShopifyShopProduct = (payload: { shopId: string; shopifyProductId: string; shopifyInventoryItemId: string }) => {
+// What the live Shopify check needs: a variant is matched by its SKU, a virtual through one of its variants.
+const shopifyListingProduct = computed(() => ({
+  sku: identifications.value.find((row) => row.active && row.goodIdentificationTypeId === "SKU")?.idValue ?? "",
+  isVirtual: Boolean(core.value?.isVirtual),
+  childSku: variants.value.find((variant) => variant.sku)?.sku ?? ""
+}))
+const onUpsertShopifyShopProduct = (payload: ShopifyLinkPayload) => {
   if(!canEditProduct.value) {return}
   shopifyMutations.upsert.mutateAsync(payload).catch((error) => toast.error(error, translate("Could not save Shopify shop product")))
 }
-const onRemoveShopifyShopProduct = (shopId: string) => {
+const onReplaceShopifyShopProduct = (change: { from: ShopifyLinkKey; to: ShopifyLinkPayload }) => {
   if(!canEditProduct.value) {return}
-  shopifyMutations.remove.mutateAsync(shopId).catch((error) => toast.error(error, translate("Could not remove Shopify shop product")))
+  shopifyMutations.replace.mutateAsync(change).catch((error) => toast.error(error, translate("Could not save Shopify shop product")))
+}
+const onRemoveShopifyShopProduct = (key: ShopifyLinkKey) => {
+  if(!canEditProduct.value) {return}
+  shopifyMutations.remove.mutateAsync(key).catch((error) => toast.error(error, translate("Could not remove Shopify shop product")))
 }
 // feature edits apply to whichever family member is being edited
 const featureMutations = useFeatureMutations(() => editingProductId.value, () => parentProductId.value)

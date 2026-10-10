@@ -1,9 +1,9 @@
 import { queryOptions } from "@tanstack/vue-query"
+import { fetchImportHistories, fetchProductStores, fetchShopifyShops } from "@/api/catalog"
 import { fetchBoxTypes, fetchCatalogList, fetchUoms } from "@/api/pim"
-import { fetchImportHistories, fetchProductStores } from "@/api/catalog"
-import { normalizeCatalogOption } from "@/domain/normalize/identification"
 import { normalizeImportEntry } from "@/domain/normalize/history"
-import type { CatalogOption } from "@/domain/types/product"
+import { normalizeCatalogOption } from "@/domain/normalize/identification"
+import type { CatalogOption, ShopifyShop } from "@/domain/types/product"
 import { qk } from "./keys"
 
 /** Common units float to the top of the select; the rest stay available but out of the way. */
@@ -67,6 +67,30 @@ export const featureApplTypesOptions = () => catalogListOptions("featureApplType
 export const associationTypesOptions = () => catalogListOptions("associationTypes", "productAssocTypeId")
 export const identificationTypesOptions = () => catalogListOptions("goodIdentificationTypes", "goodIdentificationTypeId", { parentTypeId: "HC_GOOD_ID_TYPE" })
 export const boxTypesOptions = () => boxListOptions("boxTypes", "shipmentBoxTypeId")
+
+/** A shop's main app connection: its remotes also include embedded POS apps, which are not meant for
+ *  catalog queries. Falls back to the first remote when none is marked as the default app. */
+function defaultAppRemoteId(remotes: unknown): string {
+  const rows = Array.isArray(remotes) ? remotes as Record<string, unknown>[] : []
+  const remote = rows.find((row) => row.purposeTypeId === "SsctShopifyDefaultApp") ?? rows[0]
+
+  return String(remote?.systemMessageRemoteId ?? "")
+}
+
+/** Shopify shops by shop ID, keeping only the fields lists show (the records also carry shop config). */
+export function shopifyShopsOptions() {
+  return queryOptions({
+    queryKey: qk.catalog.list("shopifyShops"),
+    queryFn: async (): Promise<ShopifyShop[]> =>
+      (await fetchShopifyShops()).map((row) => ({
+        shopId: String(row.shopId ?? ""),
+        name: String(row.name ?? row.shopId ?? ""),
+        domain: String(row.myshopifyDomain ?? row.domain ?? ""),
+        remoteId: defaultAppRemoteId(row.shopRemotes)
+      })),
+    staleTime: Infinity
+  })
+}
 
 export function productStoresOptions() {
   return queryOptions({

@@ -43,3 +43,8 @@ export async function fetchImportHistories(pageSize = 100): Promise<Raw[]> {
 export async function fetchProductStores(): Promise<Raw[]> {
   return responseList(await request({ url: "admin/productStores", method: "get", params: { pageSize: 100 } }))
 }
+
+/** Every Shopify shop the OMS is connected to (shop ID, name, domain, ProductStore). */
+export async function fetchShopifyShops(): Promise<Raw[]> {
+  return responseList(await request({ url: "sob/shopify/shops", method: "get", params: { pageSize: 200 } }))
+}

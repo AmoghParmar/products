@@ -1,10 +1,10 @@
+import { DateTime } from "luxon"
 import type {
   AssociationCreate, AssociationKey, AssociationUpdate, DedupChange, FeatureApply, FeatureCreate,
   IdentificationCreate, IdentificationKey, ProductCreatePayload, ProductFieldsPatch, ProductPriceCreate
 } from "@/domain/types/pim"
-import { request, responseList } from "./http"
-import { DateTime } from "luxon"
 import { useUserStore } from "@/store/user"
+import { request, responseList } from "./http"
 
 /** All calls against the oms component (/rest/s1/oms/...) — writes plus the reference reads it owns. */
 
@@ -58,7 +58,7 @@ export function expireIdentification(productId: string, key: IdentificationKey):
   return request({ url: `oms/products/${productId}/identifications`, method: "post", data: {
     ...key,
     thruDate: DateTime.now().toMillis()
-  }})
+  } })
 }
 
 // ---------- associations ----------
@@ -82,7 +82,7 @@ export function reactivateAssociation(productId: string, key: AssociationKey): P
   return request({ url: `oms/products/${productId}/assocs`, method: "post", data: {
     ...key,
     thruDate: null
-  }})
+  } })
 }
 
 export function resequenceAssociations(productId: string, items: (AssociationKey & { sequenceNum: number })[]): Promise<unknown> {
@@ -115,7 +115,7 @@ export function fetchCatalogList(
   resource: "productTypes" | "featureTypes" | "featureApplTypes" | "associationTypes" | "goodIdentificationTypes" | "boxTypes",
   extraParams?: Record<string, unknown>
 ): Promise<Raw[]> {
-  return request({ url: resource === "goodIdentificationTypes" ? `oms/goodIdentificationTypes` : `oms/products/${resource}`, method: "get", params: { pageSize: 200, ...extraParams } }).then(responseList)
+  return request({ url: resource === "goodIdentificationTypes" ? "oms/goodIdentificationTypes" : `oms/products/${resource}`, method: "get", params: { pageSize: 200, ...extraParams } }).then(responseList)
 }
 
 export function fetchBoxTypes(extraParams?: Record<string, unknown>): Promise<Raw[]> {
@@ -138,10 +138,10 @@ export function expireProductPrice(productId: string, productPriceTypeId: string
 
 // ---------- categories ----------
 export function fetchProductCategoryMembers(productId: string): Promise<Raw[]> {
-  return request({ url: "admin/productCategories/member", method: "get", params: { 
+  return request({ url: "admin/productCategories/member", method: "get", params: {
     pageSize: 200,
     productId
-  }}).then(responseList)
+  } }).then(responseList)
 }
 
 export function expireProductCategoryMember(productId: string, productCategoryId: string, fromDate: string): Promise<unknown> {
@@ -152,7 +152,7 @@ export async function fetchProductCategories(pageSize = 50): Promise<any> {
   return responseList(await request({
     url: "oms/productStores/categories",
     method: "get",
-    params: { pageSize, productStoreId: useUserStore().currentProductStore.productStoreId}
+    params: { pageSize, productStoreId: useUserStore().currentProductStore.productStoreId }
   }))
 }
 
@@ -174,13 +174,28 @@ export function upsertShopifyShopProduct(payload: {
   return request({ url: `oms/products/${payload.productId}/shopifyShopProducts`, method: "post", data: payload })
 }
 
-export function deleteShopifyShopProduct(productId: string, shopId: string): Promise<unknown> {
-  return request({ url: `oms/products/${productId}/shopifyShopProducts`, method: "delete", data: { productId, shopId } })
+/** ShopifyShopProduct's key is shop plus Shopify ID (a product may have several links to one shop),
+ *  so a delete names both; the shop alone matches no row. */
+export function deleteShopifyShopProduct(productId: string, shopId: string, shopifyProductId: string): Promise<unknown> {
+  return request({ url: `oms/products/${productId}/shopifyShopProducts`, method: "delete", data: { productId, shopId, shopifyProductId } })
+}
+
+/** The links a shop already has for these Shopify IDs, whichever product they belong to: a Shopify ID
+ *  can be linked to one product only, and saving it again would move it to the saving product. */
+export function fetchShopifyLinkOwners(shopId: string, shopifyProductIds: string[]): Promise<Raw[]> {
+  const ids = Array.from(new Set(shopifyProductIds.map((id) => id.trim()).filter(Boolean)))
+  if(!shopId || !ids.length) {return Promise.resolve([])}
+
+  return request({
+    url: "sob/shopify/shopProducts",
+    method: "get",
+    params: { shopId, shopifyProductId: ids.join(","), shopifyProductId_op: "in", pageSize: ids.length }
+  }).then(responseList)
 }
 
 // ---------- keywords / tags ----------
 export function addProductKeyword(productId: string, keyword: string): Promise<unknown> {
-  return request({ url: `oms/products/${productId}/keywords`, method: "post", data: { 
+  return request({ url: `oms/products/${productId}/keywords`, method: "post", data: {
     keyword,
     keywordTypeId: "KWT_TAG",
     statusId: "KW_APPROVED"
