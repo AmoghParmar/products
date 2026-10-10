@@ -189,7 +189,10 @@
           @copy-from-parent="copyShippingFromParent"
         />
 
-        <HistoryCard :entries="audit" />
+        <HistoryCard
+          :entries="audit"
+          :identification-type-labels="identificationTypeLabels"
+        />
 
         <AddVariantModal
           :is-open="addVariantModalOpen"
@@ -468,6 +471,12 @@ const featureTypesQuery = useQuery(featureTypesOptions())
 const lengthUomsQuery = useQuery(lengthUomOptions())
 const weightUomsQuery = useQuery(weightUomOptions())
 const identificationTypes = computed(() => identificationTypesQuery.data.value ?? [])
+// Labels for the history: the type list, plus the descriptions this product's own identifications carry
+// (SKU, for one, is not in the type list).
+const identificationTypeLabels = computed<Record<string, string>>(() => ({
+  ...Object.fromEntries(identifications.value.map((row) => [row.goodIdentificationTypeId, row.typeDescription || row.goodIdentificationTypeId])),
+  ...Object.fromEntries(identificationTypes.value.map((option) => [option.id, option.label]))
+}))
 const featureTypes = computed(() => featureTypesQuery.data.value ?? [])
 const lengthUoms = computed(() => lengthUomsQuery.data.value ?? [])
 const weightUoms = computed(() => weightUomsQuery.data.value ?? [])

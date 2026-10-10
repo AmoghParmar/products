@@ -48,3 +48,11 @@ export async function fetchProductStores(): Promise<Raw[]> {
 export async function fetchShopifyShops(): Promise<Raw[]> {
   return responseList(await request({ url: "sob/shopify/shops", method: "get", params: { pageSize: 200 } }))
 }
+
+/** Facility names for a few facility IDs (history entries name facilities by ID). */
+export async function fetchFacilityNames(facilityIds: string[]): Promise<Raw[]> {
+  const ids = Array.from(new Set(facilityIds.filter(Boolean)))
+  if(!ids.length) {return []}
+
+  return responseList(await request({ url: "oms/facilities", method: "get", params: { facilityId: ids.join(","), facilityId_op: "in", pageSize: ids.length } }))
+}

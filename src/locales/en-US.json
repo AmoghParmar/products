@@ -186,5 +186,19 @@
   "Linked to {product}": "Linked to {product}",
   "Product {productId}": "Product {productId}",
   "Open product": "Open product",
-  "Linked to another product on this shop.": "Linked to another product on this shop."
+  "Linked to another product on this shop.": "Linked to another product on this shop.",
+  "Change history": "Change history",
+  "No recorded changes yet": "No recorded changes yet",
+  "Changes to identifier values and facility settings are recorded here.": "Changes to identifier values and facility settings are recorded here.",
+  "Show more": "Show more",
+  "System": "System",
+  "{setting} at {facility}": "{setting} at {facility}",
+  "Set to {value}": "Set to {value}",
+  "Cleared, was {value}": "Cleared, was {value}",
+  "{from} to {to}": "{from} to {to}",
+  "Minimum stock": "Minimum stock",
+  "Allow pickup": "Allow pickup",
+  "Allow brokering": "Allow brokering",
+  "Yes": "Yes",
+  "No": "No"
 }

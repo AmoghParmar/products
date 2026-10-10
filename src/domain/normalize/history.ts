@@ -3,7 +3,7 @@ import { isoDate, textValue } from "./value"
 
 type Raw = Record<string, unknown>
 
-/** admin/entityAuditLogs row → ProductHistoryEntry (field-level audit trail on the detail page). */
+/** oms/products/{id}/history row (EntityAuditLog, with userFullName) → ProductHistoryEntry. */
 export function normalizeAuditEntry(record: Raw): ProductHistoryEntry {
   return {
     id: textValue(record.auditHistorySeqId ?? record.entityAuditLogId ?? `${record.changedEntityName}-${record.changedDate}`),
@@ -14,7 +14,9 @@ export function normalizeAuditEntry(record: Raw): ProductHistoryEntry {
     oldValue: textValue(record.oldValueText ?? record.oldValue),
     newValue: textValue(record.newValueText ?? record.newValue),
     changedByUserId: textValue(record.changedByUserId ?? record.changedByUser),
-    changedDate: isoDate(record.changedDate) ?? ""
+    changedByName: textValue(record.userFullName),
+    changedDate: isoDate(record.changedDate) ?? "",
+    pkSecondaryValue: textValue(record.pkSecondaryValue)
   }
 }
 

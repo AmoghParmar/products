@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/vue-query"
-import { fetchImportHistories, fetchProductStores, fetchShopifyShops } from "@/api/catalog"
+import { fetchFacilityNames, fetchImportHistories, fetchProductStores, fetchShopifyShops } from "@/api/catalog"
 import { fetchBoxTypes, fetchCatalogList, fetchUoms } from "@/api/pim"
 import { normalizeImportEntry } from "@/domain/normalize/history"
 import { normalizeCatalogOption } from "@/domain/normalize/identification"
@@ -108,5 +108,18 @@ export function importHistoryOptions() {
   return queryOptions({
     queryKey: qk.imports,
     queryFn: async () => (await fetchImportHistories()).map(normalizeImportEntry)
+  })
+}
+
+/** Facility names by facility ID, for the facilities a list mentions. */
+export function facilityNamesOptions(facilityIds: string[]) {
+  const ids = Array.from(new Set(facilityIds.filter(Boolean))).sort()
+
+  return queryOptions({
+    queryKey: qk.catalog.list(`facilityNames:${ids.join(",")}`),
+    queryFn: async (): Promise<Record<string, string>> =>
+      Object.fromEntries((await fetchFacilityNames(ids)).map((row) => [String(row.facilityId ?? ""), String(row.facilityName ?? row.facilityId ?? "")])),
+    enabled: ids.length > 0,
+    staleTime: Infinity
   })
 }

@@ -227,8 +227,11 @@ export interface ProductHistoryEntry {
   oldValue: string
   newValue: string
   changedByUserId: string
+  /** The changing user's display name, when the history service joins it. */
+  changedByName: string
   changedDate: string
   pkPrimaryValue: string
+  pkSecondaryValue: string
 }
 
 export interface ImportHistoryEntry {
