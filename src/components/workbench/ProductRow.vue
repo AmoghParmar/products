@@ -18,18 +18,7 @@
       @keydown.stop
       @ion-change="$emit('selectionChange', $event.detail.checked)"
     />
-    <ion-thumbnail slot="start">
-      <DxpShopifyImg
-        :src="product.imageUrl"
-        size="thumb"
-      />
-    </ion-thumbnail>
-
-    <ion-label>
-      {{ primaryIdentifier }}
-      <p v-if="secondaryIdentifier">
-        {{ secondaryIdentifier }}
-      </p>
+    <ProductIdentity :product="product">
       <div
         v-if="product.isVirtual || presellState || visibleTags.length"
         class="row-badges"
@@ -56,7 +45,7 @@
           {{ tag }}
         </ion-badge>
       </div>
-    </ion-label>
+    </ProductIdentity>
 
     <div
       slot="end"
@@ -92,16 +81,14 @@
 </template>
 
 <script setup lang="ts">
-import { IonBadge, IonCheckbox, IonChip, IonIcon, IonItem, IonLabel, IonNote, IonThumbnail } from "@ionic/vue"
+import { translate } from "@common"
+import { IonBadge, IonCheckbox, IonChip, IonIcon, IonItem, IonLabel, IonNote } from "@ionic/vue"
 import { gitBranchOutline } from "ionicons/icons"
 import { computed } from "vue"
-import router from "../../router"
-import { DxpShopifyImg, translate } from "@common"
-import { productDisplayName } from "@/domain/normalize/product"
+import ProductIdentity from "@/components/ProductIdentity.vue"
 import { displayableTags, getPresellState, presellColor, presellLabel } from "@/domain/product/flags"
-import { productIdentifierValue } from "@/domain/product/identification"
 import type { ProductSummary, RowSalesSpark } from "@/domain/types/product"
-import { useProductIdentificationStore } from "@/store/productIdentification"
+import router from "../../router"
 
 const props = withDefaults(
   defineProps<{
@@ -125,12 +112,6 @@ const resolvedRouterLink = computed(() => {
 
   return router.resolve(props.routerLink).href
 })
-const productIdentificationStore = useProductIdentificationStore()
-const productIdentificationPref = computed(() => productIdentificationStore.getProductIdentificationPref)
-// Primary and secondary follow Settings > Product identifier; without a primary value the row shows the name.
-const primaryIdentifier = computed(() =>
-  productIdentifierValue(productIdentificationPref.value.primaryId, props.product) || productDisplayName(props.product))
-const secondaryIdentifier = computed(() => productIdentifierValue(productIdentificationPref.value.secondaryId, props.product))
 const presellState = computed(() => getPresellState(props.product))
 const visibleTags = computed(() => displayableTags(props.product.tags).slice(0, props.maxTags))
 const variantCountLabel = computed(() => {

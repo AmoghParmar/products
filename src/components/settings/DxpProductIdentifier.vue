@@ -59,23 +59,19 @@
         </ion-label>
       </ion-item>
       <ion-item lines="none">
-        <ion-thumbnail slot="start">
-          <DxpShopifyImg size="small" :src="sampleProduct.mainImageUrl" />
-        </ion-thumbnail>
-        <!-- Shown the way product rows show it: without the primary identifier a row shows the product
-             name. A missing identifier is named, so it is not mistaken for a value. -->
-        <ion-label>
-          {{ samplePrimary || sampleName }}
-          <p v-if="sampleSecondary">
-            {{ sampleSecondary }}
-          </p>
-          <p v-if="!samplePrimary">
+        <!-- The same block every product list uses. A missing identifier is named, so it is not
+             mistaken for a value. -->
+        <ProductIdentity
+          v-slot="{ identity }"
+          :product="sampleProduct"
+        >
+          <p v-if="identity.primaryMissing">
             {{ translate("No {identifier} on this product, so rows show its name.", { identifier: identifierLabel(productIdentificationPref.primaryId) }) }}
           </p>
-          <p v-if="productIdentificationPref.secondaryId && !sampleSecondary">
+          <p v-if="identity.secondaryMissing">
             {{ translate("No {identifier} on this product.", { identifier: identifierLabel(productIdentificationPref.secondaryId) }) }}
           </p>
-        </ion-label>
+        </ProductIdentity>
         <ion-button
           slot="end"
           size="default"
@@ -92,17 +88,17 @@
 </template>
 
 <script setup lang="ts">
-import { DxpShopifyImg, translate } from "@common"
+import { translate } from "@common"
 import {
   IonButton, IonCard, IonCardContent, IonCardHeader, IonCardTitle, IonIcon, IonItem, IonLabel, IonSelect,
-  IonSelectOption, IonThumbnail
+  IonSelectOption
 } from "@ionic/vue"
 import { shuffleOutline } from "ionicons/icons"
 import { computed, onMounted } from "vue"
 import Actions from "@/authorization/actions"
-import { productDisplayName } from "@/domain/normalize/product"
+import ProductIdentity from "@/components/ProductIdentity.vue"
 import {
-  type ProductIdentificationOption, type ProductIdentificationPref, productIdentifierValue
+  type ProductIdentificationOption, type ProductIdentificationPref
 } from "@/domain/product/identification"
 import { useProductIdentificationStore } from "@/store/productIdentification"
 import { useUserStore } from "@/store/user"
@@ -116,9 +112,6 @@ const productIdentificationOptions = computed(() => productIdentificationStore.g
 const identifierCoverage = computed(() => productIdentificationStore.getIdentifierCoverage)
 const sampleProduct = computed(() => productIdentificationStore.getCurrentSampleProduct as Record<string, any> | null)
 const canUpdate = computed(() => Boolean(productStoreId.value) && userStore.hasPermission(Actions.APP_PRODUCT_IDENTIFIER_UPDATE))
-const samplePrimary = computed(() => productIdentifierValue(productIdentificationPref.value.primaryId, sampleProduct.value))
-const sampleSecondary = computed(() => productIdentifierValue(productIdentificationPref.value.secondaryId, sampleProduct.value))
-const sampleName = computed(() => sampleProduct.value ? productDisplayName(sampleProduct.value as { productId: string }) : "")
 
 onMounted(() => {
   productIdentificationStore.prepareProductIdentifierOptions()

@@ -35,16 +35,7 @@
             :checked="selectedMap.has(product.productId)"
             style="pointer-events: none"
           />
-          <ion-thumbnail slot="start">
-            <DxpShopifyImg
-              :src="product.imageUrl"
-              size="thumb"
-            />
-          </ion-thumbnail>
-          <ion-label>
-            <h3>{{ displayName(product) }}</h3>
-            <p>{{ product.sku || product.productId }}</p>
-          </ion-label>
+          <ProductIdentity :product="product" />
           <ion-input
             v-if="selectedMap.has(product.productId)"
             slot="end"
@@ -84,18 +75,19 @@
 </template>
 
 <script setup lang="ts">
+import { translate } from "@common"
 import {
   IonButton, IonButtons, IonCheckbox, IonContent, IonFab, IonFabButton,
-  IonHeader, IonIcon, IonInput, IonItem, IonLabel, IonList, IonModal, IonSearchbar,
-  IonThumbnail, IonTitle, IonToolbar
+  IonHeader, IonIcon, IonInput, IonItem, IonList, IonModal, IonSearchbar,
+  IonTitle, IonToolbar
 } from "@ionic/vue"
-import { computed, reactive, ref, watch } from "vue"
 import { useQuery } from "@tanstack/vue-query"
 import { checkmarkOutline } from "ionicons/icons"
-import { DxpShopifyImg, translate } from "@common"
-import EmptyState from "@/components/EmptyState.vue"
+import { computed, reactive, ref, watch } from "vue"
 import { runProductSolrQuery, solrDocs } from "@/api/solr"
-import { normalizeProductSummary, productDisplayName } from "@/domain/normalize/product"
+import EmptyState from "@/components/EmptyState.vue"
+import ProductIdentity from "@/components/ProductIdentity.vue"
+import { normalizeProductSummary } from "@/domain/normalize/product"
 import { productSearchQueryText } from "@/domain/solr/productQuery"
 import type { ProductSummary } from "@/domain/types/product"
 
@@ -176,7 +168,6 @@ const candidates = computed(() => {
 })
 
 const isLoading = pickerQuery.isLoading
-const displayName = productDisplayName
 </script>
 
 <style scoped>

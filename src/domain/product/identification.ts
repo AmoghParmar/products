@@ -57,3 +57,32 @@ export function productIdentifierValue(identifierId: string, product?: object | 
 
   return EMPTY_IDENTIFIER_TEXT.has(text.toLowerCase()) ? "" : text
 }
+
+export interface ProductIdentity {
+  primary: string
+  secondary: string
+  /** The product lacks the primary identifier, so primary holds its name. */
+  primaryMissing: boolean
+  /** A secondary identifier is set but the product lacks it. */
+  secondaryMissing: boolean
+}
+
+/** The two lines every product list shows: the preferred primary identifier, or the product's name
+ *  (then internal name, then ID) when it lacks one, and the secondary identifier unless it repeats
+ *  the primary line. Works on Solr documents, ProductSummary rows and plain records alike. */
+export function productIdentity(pref: ProductIdentificationPref, product?: object | null): ProductIdentity {
+  const record = (product ?? {}) as Record<string, unknown>
+  const preferred = productIdentifierValue(pref.primaryId, product)
+  const name = [record.productName, record.internalName, record.productId]
+    .map((value) => (value == null ? "" : String(value).trim()))
+    .find((text) => text && !EMPTY_IDENTIFIER_TEXT.has(text.toLowerCase())) ?? ""
+  const primary = preferred || name
+  const secondaryValue = productIdentifierValue(pref.secondaryId, product)
+
+  return {
+    primary,
+    secondary: secondaryValue === primary ? "" : secondaryValue,
+    primaryMissing: !preferred,
+    secondaryMissing: Boolean(pref.secondaryId) && !secondaryValue
+  }
+}

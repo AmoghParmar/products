@@ -7,6 +7,7 @@ export const qk = {
     all: ["products"] as const,
     search: (params: ProductSearchParams) => ["products", "search", params] as const,
     rowSales: (productIds: string[]) => ["products", "rowSales", [...productIds].sort()] as const,
+    documents: (productIds: string[]) => ["products", "documents", [...productIds].sort()] as const,
     tagFacets: (scope: Omit<ProductSearchParams, "tags">) => ["products", "tagFacets", scope] as const,
     groupIdFacets: (scope: Omit<ProductSearchParams, "groupIds">) => ["products", "groupIdFacets", scope] as const
   },
@@ -20,7 +21,8 @@ export const qk = {
     audit: (productId: string) => ["product", productId, "audit"] as const,
     solr: (productId: string) => ["product", productId, "solr"] as const,
     categories: (productId: string) => ["product", productId, "categories"] as const,
-    shopifyShopProducts: (productId: string) => ["product", productId, "shopifyShopProducts"] as const
+    shopifyShopProducts: (productId: string) => ["product", productId, "shopifyShopProducts"] as const,
+    shopifyListingChecks: (productId: string, signature: string) => ["product", productId, "shopifyListingChecks", signature] as const
   },
   catalog: {
     all: ["catalog"] as const,

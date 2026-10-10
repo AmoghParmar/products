@@ -86,15 +86,7 @@
                 @keydown.stop
                 @ion-change="setSelected(productIdOf(row), $event.detail.checked)"
               />
-              <ion-thumbnail slot="start">
-                <DxpShopifyImg :src="imageOf(row)" size="small" />
-              </ion-thumbnail>
-              <ion-label>
-                {{ primaryInfo(row) }}
-                <p v-if="secondaryInfo(row)">
-                  {{ secondaryInfo(row) }}
-                </p>
-              </ion-label>
+              <ProductIdentity :product="productOf(row) ?? row" />
             </ion-item>
             <ion-label
               v-for="(field, index) in PRODUCT_CALENDAR_DATE_FIELDS"
@@ -140,11 +132,11 @@
 </template>
 
 <script setup lang="ts">
-import { DxpShopifyImg, translate } from "@common"
+import { translate } from "@common"
 import {
   IonButton, IonButtons, IonCard, IonCardContent, IonCardHeader, IonCardSubtitle, IonCardTitle, IonCheckbox,
   IonContent, IonFooter, IonHeader, IonIcon, IonInfiniteScroll, IonInfiniteScrollContent, IonItem, IonLabel, IonList,
-  IonListHeader, IonMenuButton, IonPage, IonProgressBar, IonThumbnail, IonTitle, IonToolbar, modalController
+  IonListHeader, IonMenuButton, IonPage, IonProgressBar, IonTitle, IonToolbar, modalController
 } from "@ionic/vue"
 import { useInfiniteQuery, useQueryClient } from "@tanstack/vue-query"
 import { openOutline, refreshOutline } from "ionicons/icons"
@@ -155,14 +147,14 @@ import { fetchProductCalendarMappings, fetchProductStoreShops } from "@/api/prod
 import ProductCalendarDatesModal from "@/components/calendar/ProductCalendarDatesModal.vue"
 import EmptyState from "@/components/EmptyState.vue"
 import ErrorState from "@/components/ErrorState.vue"
+import ProductIdentity from "@/components/ProductIdentity.vue"
 import SearchFilterCard from "@/components/SearchFilterCard.vue"
+import { useProductIdentity } from "@/composables/useProductIdentity"
 import {
   PRODUCT_CALENDAR_DATE_FIELDS, PRODUCT_CALENDAR_DATE_LABELS, type ProductCalendarDatesItem, formatCalendarDate
 } from "@/domain/product/calendar"
-import { productIdentifierValue } from "@/domain/product/identification"
 import { qk } from "@/queries/keys"
 import { productCalendarOptions } from "@/queries/productCalendar"
-import { useProductIdentificationStore } from "@/store/productIdentification"
 import { useUserStore } from "@/store/user"
 import { showToast } from "@/utils"
 import { getActiveCalendarMappings, getCalendarMappingManagementHref } from "@/utils/productCalendarMappings"
@@ -171,7 +163,7 @@ type CalendarRow = Record<string, unknown>
 
 const route = useRoute()
 const userStore = useUserStore()
-const productIdentificationStore = useProductIdentificationStore()
+const { identityOf } = useProductIdentity()
 const queryClient = useQueryClient()
 const shops = ref<Record<string, any>[]>([])
 const mappings = ref<Record<string, any>[]>([])
@@ -194,7 +186,6 @@ const { hasNextPage, isError, isLoading } = calendarQuery
 const pages = computed(() => calendarQuery.data.value?.pages ?? [])
 const rows = computed(() => pages.value.flatMap((page) => page.rows))
 const productsById = computed<Record<string, Record<string, unknown>>>(() => Object.assign({}, ...pages.value.map((page) => page.products)))
-const productIdentificationPref = computed(() => productIdentificationStore.getProductIdentificationPref)
 const totalCount = computed(() => pages.value[0]?.totalCount ?? null)
 const resultsLabel = computed(() => totalCount.value === null
   ? translate("Calendar dates")
@@ -217,18 +208,6 @@ function imageOf(row: CalendarRow) {
   return String(productOf(row)?.mainImageUrl ?? "")
 }
 
-// Primary and secondary follow the ProductStore's product identifier setting (Settings > Product
-// identifier); a product without the primary identifier, such as a virtual without a SKU, shows its name.
-function primaryInfo(row: CalendarRow) {
-  const product = productOf(row) ?? row
-
-  return productIdentifierValue(productIdentificationPref.value.primaryId, product) ||
-    String(product.productName || row.productName || row.productId || "")
-}
-
-function secondaryInfo(row: CalendarRow) {
-  return productIdentifierValue(productIdentificationPref.value.secondaryId, productOf(row) ?? row)
-}
 
 function toggleSelectMode() {
   selectMode.value = !selectMode.value
@@ -255,10 +234,13 @@ function activateRow(row: CalendarRow) {
 }
 
 function toDatesItem(row: CalendarRow): ProductCalendarDatesItem {
+  // The Solr document when the lookup found one, else the calendar row (product ID and name).
+  const { primary, secondary } = identityOf(productOf(row) ?? row)
+
   return {
     productId: productIdOf(row),
-    primary: primaryInfo(row),
-    secondary: secondaryInfo(row),
+    primary,
+    secondary,
     imageUrl: imageOf(row),
     dates: Object.fromEntries(PRODUCT_CALENDAR_DATE_FIELDS.map((field) => [field, row[field]]))
   }

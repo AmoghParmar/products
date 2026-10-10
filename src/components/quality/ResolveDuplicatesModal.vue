@@ -27,18 +27,17 @@
           :key="draft.productId"
           lines="full"
         >
-          <ion-thumbnail slot="start">
-            <DxpShopifyImg
-              :src="productById(draft.productId)?.imageUrl ?? ''"
-              size="thumb"
-            />
-          </ion-thumbnail>
-          <ion-label>
-            <h2>{{ productLabel(draft.productId) }}</h2>
-            <p>
-              {{ draft.productId }}<template v-if="createdLabel(draft.productId)">
-                · {{ createdLabel(draft.productId) }}
-              </template>
+          <!-- Duplicates can share the very identifier rows lead with, so the product ID is added when
+               the identifier setting does not already show it. -->
+          <ProductIdentity
+            v-slot="{ identity }"
+            :product="productById(draft.productId) ?? { productId: draft.productId }"
+          >
+            <p v-if="identity.primary !== draft.productId && identity.secondary !== draft.productId">
+              {{ draft.productId }}
+            </p>
+            <p v-if="createdLabel(draft.productId)">
+              {{ createdLabel(draft.productId) }}
             </p>
             <ion-input
               :value="draft.value"
@@ -47,7 +46,7 @@
               :helper-text="draft.value === draft.original ? translate('Unchanged') : `${translate('Was')} ${draft.original}`"
               @ion-input="updateDraft(draft.productId, $event.detail.value ?? '')"
             />
-          </ion-label>
+          </ProductIdentity>
         </ion-item>
       </ion-list>
     </ion-content>
@@ -73,13 +72,13 @@
 </template>
 
 <script setup lang="ts">
+import { translate } from "@common"
 import {
   IonButton, IonButtons, IonContent, IonFooter, IonHeader, IonInput, IonItem, IonLabel, IonList, IonListHeader,
-  IonModal, IonSpinner, IonThumbnail, IonTitle, IonToolbar
+  IonModal, IonSpinner, IonTitle, IonToolbar
 } from "@ionic/vue"
 import { computed, ref, watch } from "vue"
-import { DxpShopifyImg, translate } from "@common"
-import { productDisplayName } from "@/domain/normalize/product"
+import ProductIdentity from "@/components/ProductIdentity.vue"
 import type { DuplicateDraft, DuplicateGroup, QualityRule } from "@/domain/types/quality"
 
 const props = defineProps<{
@@ -112,15 +111,10 @@ const changedDrafts = computed(() => drafts.value.filter((draft) => draft.value.
 const changedCount = computed(() => changedDrafts.value.length)
 
 const productById = (productId: string) => props.group?.products.find((product) => product.productId === productId)
-const productLabel = (productId: string) => {
-  const product = productById(productId)
-
-  return product ? productDisplayName(product) : productId
-}
 const createdLabel = (productId: string) => {
   const created = productById(productId)?.createdDate
 
-  return created ? `${translate("created")} ${new Date(created).toLocaleDateString()}` : ""
+  return created ? translate("Created {date}", { date: new Date(created).toLocaleDateString() }) : ""
 }
 
 const updateDraft = (productId: string, value: string) => {

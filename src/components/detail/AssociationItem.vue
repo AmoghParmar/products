@@ -3,27 +3,18 @@
     lines="none"
     class="assoc-item"
   >
-    <ion-thumbnail slot="start">
-      <DxpShopifyImg
-        :src="association.relatedImageUrl"
-        size="thumb"
-      />
-    </ion-thumbnail>
-    <ion-label>
-      <h3>
-        {{ association.relatedName || association.relatedProductId }}
-        <template v-if="quantityLabel">
-          {{ quantityLabel }}
-        </template>
-      </h3>
-      <p>{{ association.relatedSku || association.relatedProductId }}</p>
+    <!-- The Solr document when the card found one; until then the association's own name and image. -->
+    <ProductIdentity :product="product ?? fallbackProduct">
+      <p v-if="quantityLabel">
+        {{ quantityLabel }}
+      </p>
       <ion-note
         v-if="expiryLabel"
         color="warning"
       >
         {{ expiryLabel }}
       </ion-note>
-    </ion-label>
+    </ProductIdentity>
     <ion-button
       v-if="canEdit && association.active"
       slot="end"
@@ -47,17 +38,21 @@
 </template>
 
 <script setup lang="ts">
-import { IonButton, IonItem, IonLabel, IonNote, IonThumbnail } from "@ionic/vue"
+import { translate } from "@common"
+import { IonButton, IonItem, IonNote } from "@ionic/vue"
 import { computed } from "vue"
-import { DxpShopifyImg, translate } from "@common"
+import ProductIdentity from "@/components/ProductIdentity.vue"
 import { expiresInDays } from "@/domain/normalize/association"
 import type { ProductAssociation } from "@/domain/types/product"
 
 const props = withDefaults(defineProps<{
   association: ProductAssociation
+  /** The related product's Solr document, for the product identifier setting. */
+  product?: Record<string, unknown>
   canEdit?: boolean
   showQuantity?: boolean
 }>(), {
+  product: undefined,
   canEdit: true,
   showQuantity: false
 })
@@ -67,8 +62,15 @@ defineEmits<{
   (event: "reactivate"): void
 }>()
 
-const quantityLabel = computed(() =>
-  props.showQuantity && props.association.quantity ? `× ${props.association.quantity}` : "")
+const fallbackProduct = computed(() => ({
+  productId: props.association.relatedProductId,
+  productName: props.association.relatedName,
+  imageUrl: props.association.relatedImageUrl
+}))
+
+const quantityLabel = computed(() => props.showQuantity && props.association.quantity
+  ? translate("Quantity {quantity}", { quantity: props.association.quantity })
+  : "")
 
 const expiryLabel = computed(() => {
   const days = expiresInDays(props.association)

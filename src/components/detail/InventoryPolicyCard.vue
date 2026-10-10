@@ -42,6 +42,7 @@
         v-for="assoc in substitutes"
         :key="`${assoc.relatedProductId}-${assoc.fromDate}`"
         :association="assoc"
+        :product="documentFor(assoc.relatedProductId)"
         :can-edit="canEdit"
         @expire="$emit('expireSubstitute', assoc)"
         @reactivate="$emit('reactivateSubstitute', assoc)"
@@ -68,15 +69,16 @@
 </template>
 
 <script setup lang="ts">
+import { translate } from "@common"
 import { IonButton, IonIcon, IonItem, IonToggle } from "@ionic/vue"
 import { swapHorizontalOutline } from "ionicons/icons"
-import { translate } from "@common"
 import CardSection from "@/components/common/CardSection.vue"
 import SaveFooter from "@/components/common/SaveFooter.vue"
-import AssociationItem from "./AssociationItem.vue"
+import { useProductDocuments } from "@/composables/useProductDocuments"
 import type { ProductAssociation } from "@/domain/types/product"
+import AssociationItem from "./AssociationItem.vue"
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   draft: {
     returnable: boolean
     taxable: boolean
@@ -98,6 +100,9 @@ defineEmits<{
   (event: "expireSubstitute", assoc: ProductAssociation): void
   (event: "reactivateSubstitute", assoc: ProductAssociation): void
 }>()
+
+// One Solr lookup for the card's related products, so they show the product identifier setting.
+const { documentFor } = useProductDocuments(() => (props.substitutes).map((assoc) => assoc.relatedProductId))
 </script>
 
 <style scoped>

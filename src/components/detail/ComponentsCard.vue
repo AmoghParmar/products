@@ -19,6 +19,7 @@
         v-for="assoc in components"
         :key="`${assoc.relatedProductId}-${assoc.fromDate}`"
         :association="assoc"
+        :product="documentFor(assoc.relatedProductId)"
         :can-edit="canEdit"
         show-quantity
         @expire="$emit('expireComponent', assoc)"
@@ -35,13 +36,14 @@
 </template>
 
 <script setup lang="ts">
-import { IonButton } from "@ionic/vue"
 import { translate } from "@common"
+import { IonButton } from "@ionic/vue"
 import CardSection from "@/components/common/CardSection.vue"
-import AssociationItem from "./AssociationItem.vue"
+import { useProductDocuments } from "@/composables/useProductDocuments"
 import type { ProductAssociation } from "@/domain/types/product"
+import AssociationItem from "./AssociationItem.vue"
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   components: ProductAssociation[]
   canEdit?: boolean
 }>(), {
@@ -53,6 +55,9 @@ defineEmits<{
   (event: "expireComponent", assoc: ProductAssociation): void
   (event: "reactivateComponent", assoc: ProductAssociation): void
 }>()
+
+// One Solr lookup for the card's related products, so they show the product identifier setting.
+const { documentFor } = useProductDocuments(() => (props.components).map((assoc) => assoc.relatedProductId))
 </script>
 
 <style scoped>

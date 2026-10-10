@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { DEFAULT_PRODUCT_IDENTIFICATION_PREF, parseProductIdentificationPref, productIdentifierValue } from "../identification"
+import { DEFAULT_PRODUCT_IDENTIFICATION_PREF, parseProductIdentificationPref, productIdentifierValue, productIdentity } from "../identification"
 
 describe("product identifier values", () => {
   it("reads a document field and a goodIdentifications entry", () => {
@@ -35,5 +35,34 @@ describe("product identifier preference", () => {
 
   it("reads the saved primary and secondary identifiers", () => {
     expect(parseProductIdentificationPref(JSON.stringify({ primaryId: "UPCA", secondaryId: "" }))).toEqual({ primaryId: "UPCA", secondaryId: "" })
+  })
+})
+
+describe("product identity", () => {
+  const pref = { primaryId: "SKU", secondaryId: "productId" }
+
+  it("shows the preferred identifiers", () => {
+    const product = { productId: "P1", productName: "Crew Tee", goodIdentifications: ["SKU/T-R-S"] }
+
+    expect(productIdentity(pref, product)).toEqual({ primary: "T-R-S", secondary: "P1", primaryMissing: false, secondaryMissing: false })
+  })
+
+  it("falls back to the name, then internal name, then ID without the primary identifier", () => {
+    expect(productIdentity(pref, { productId: "P1", productName: "Crew Tee", goodIdentifications: ["SKU/null"] }).primary).toBe("Crew Tee")
+    expect(productIdentity(pref, { productId: "P1", productName: "", internalName: "CREW-TEE" }).primary).toBe("CREW-TEE")
+    expect(productIdentity(pref, { productId: "P1", productName: "null" })).toMatchObject({ primary: "P1", primaryMissing: true })
+  })
+
+  it("drops a secondary line that repeats the primary one", () => {
+    const product = { productId: "P1", goodIdentifications: ["SKU/null"] }
+
+    expect(productIdentity({ primaryId: "SKU", secondaryId: "productId" }, product)).toMatchObject({ primary: "P1", secondary: "" })
+  })
+
+  it("reports a missing secondary identifier only when one is set", () => {
+    const product = { productId: "P1", productName: "Crew Tee" }
+
+    expect(productIdentity({ primaryId: "productId", secondaryId: "UPCA" }, product).secondaryMissing).toBe(true)
+    expect(productIdentity({ primaryId: "productId", secondaryId: "" }, product).secondaryMissing).toBe(false)
   })
 })
