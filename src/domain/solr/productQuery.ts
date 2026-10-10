@@ -92,6 +92,26 @@ export function workbenchSearchPayload(params: ProductSearchParams, pageIndex: n
   }
 }
 
+export interface IdentifierCoverageInput {
+  id: string
+  /** A product document field (productId, groupName, ...) rather than a goodIdentifications type. */
+  isDocumentField: boolean
+}
+
+/** One request counting the products that have each identifier: a document field with a value, or a
+ *  goodIdentifications entry other than the "TYPE/null" indexed for an identification saved without
+ *  a value. Facet i<n> counts identifiers[n]; ids that are not plain names are left out. */
+export function identifierCoveragePayload(identifiers: IdentifierCoverageInput[]): SolrJsonQuery {
+  const facet = Object.fromEntries(identifiers.flatMap(({ id, isDocumentField }, index) => {
+    if(!/^\w+$/.test(id)) {return []}
+    const q = isDocumentField ? `${id}:[* TO *]` : `goodIdentifications:${id}/* -goodIdentifications:"${id}/null"`
+
+    return [[`i${index}`, { type: "query", q }]]
+  }))
+
+  return { query: "*:*", filter: ["docType:PRODUCT"], limit: 0, facet }
+}
+
 /** Product documents for a known set of productIds (image and identifiers for rows from other APIs). */
 export function productsByIdPayload(productIds: string[]): SolrJsonQuery {
   const ids = Array.from(new Set(productIds.filter(Boolean)))

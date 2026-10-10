@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { listPriceField, productScopeFilters, productSearchQueryText, productSort, rowSalesAnalyticsPayload, tagFacetPayload, workbenchSearchPayload } from "../productQuery"
+import { identifierCoveragePayload, listPriceField, productScopeFilters, productSearchQueryText, productSort, rowSalesAnalyticsPayload, tagFacetPayload, workbenchSearchPayload } from "../productQuery"
 import type { ProductSearchParams } from "../../types/product"
 
 const params: ProductSearchParams = {
@@ -109,5 +109,30 @@ describe("payloads", () => {
     const payload = tagFacetPayload(params)
     expect(payload.filter).not.toContain("tags:\"summer\"")
     expect(payload.facet?.tags).toBeTruthy()
+  })
+})
+
+describe("identifierCoveragePayload", () => {
+  it("counts document fields with a value and identifications saved with one", () => {
+    const payload = identifierCoveragePayload([
+      { id: "groupName", isDocumentField: true },
+      { id: "UPCA", isDocumentField: false }
+    ])
+
+    expect(payload.limit).toBe(0)
+    expect(payload.filter).toEqual(["docType:PRODUCT"])
+    expect(payload.facet).toEqual({
+      i0: { type: "query", q: "groupName:[* TO *]" },
+      i1: { type: "query", q: "goodIdentifications:UPCA/* -goodIdentifications:\"UPCA/null\"" }
+    })
+  })
+
+  it("leaves out an id that is not a plain name, keeping the other facet keys", () => {
+    const payload = identifierCoveragePayload([
+      { id: "bad id) OR (x", isDocumentField: false },
+      { id: "SKU", isDocumentField: false }
+    ])
+
+    expect(Object.keys(payload.facet ?? {})).toEqual(["i1"])
   })
 })

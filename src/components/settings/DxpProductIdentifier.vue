@@ -14,8 +14,10 @@
       <ion-select
         :label="translate('Primary')"
         interface="popover"
+        :interface-options="{ cssClass: 'product-identifier-popover', size: 'auto' }"
         :placeholder="translate('primary identifier')"
         :value="productIdentificationPref.primaryId"
+        :selected-text="identifierLabel(productIdentificationPref.primaryId)"
         @ion-change="updatePref('primaryId', $event.detail.value)"
       >
         <ion-select-option
@@ -23,7 +25,7 @@
           :key="option.goodIdentificationTypeId"
           :value="option.goodIdentificationTypeId"
         >
-          {{ optionLabel(option) }}
+          {{ optionLabelWithCoverage(option) }}
         </ion-select-option>
       </ion-select>
     </ion-item>
@@ -31,8 +33,10 @@
       <ion-select
         :label="translate('Secondary')"
         interface="popover"
+        :interface-options="{ cssClass: 'product-identifier-popover', size: 'auto' }"
         :placeholder="translate('secondary identifier')"
         :value="productIdentificationPref.secondaryId"
+        :selected-text="productIdentificationPref.secondaryId ? identifierLabel(productIdentificationPref.secondaryId) : translate('None')"
         @ion-change="updatePref('secondaryId', $event.detail.value)"
       >
         <ion-select-option
@@ -40,7 +44,7 @@
           :key="option.goodIdentificationTypeId"
           :value="option.goodIdentificationTypeId"
         >
-          {{ optionLabel(option) }}
+          {{ optionLabelWithCoverage(option) }}
         </ion-select-option>
         <ion-select-option value="">
           {{ translate("None") }}
@@ -109,6 +113,7 @@ const productIdentificationStore = useProductIdentificationStore()
 const productStoreId = computed(() => userStore.getCurrentProductStore?.productStoreId || "")
 const productIdentificationPref = computed(() => productIdentificationStore.getProductIdentificationPref)
 const productIdentificationOptions = computed(() => productIdentificationStore.getProductIdentificationOptions)
+const identifierCoverage = computed(() => productIdentificationStore.getIdentifierCoverage)
 const sampleProduct = computed(() => productIdentificationStore.getCurrentSampleProduct as Record<string, any> | null)
 const canUpdate = computed(() => Boolean(productStoreId.value) && userStore.hasPermission(Actions.APP_PRODUCT_IDENTIFIER_UPDATE))
 const samplePrimary = computed(() => productIdentifierValue(productIdentificationPref.value.primaryId, sampleProduct.value))
@@ -125,6 +130,17 @@ function optionLabel(option: ProductIdentificationOption) {
   return option.description ? translate(option.description) : option.goodIdentificationTypeId
 }
 
+// The choices list how many products have each identifier, so one that no product has is visible
+// before it is chosen. The closed select shows the name alone (selected-text).
+function optionLabelWithCoverage(option: ProductIdentificationOption) {
+  const count = identifierCoverage.value[option.goodIdentificationTypeId]
+  if(count === undefined) {return optionLabel(option)}
+
+  return count
+    ? translate("{identifier} ({count} products)", { identifier: optionLabel(option), count: count.toLocaleString() })
+    : translate("{identifier} (no products)", { identifier: optionLabel(option) })
+}
+
 function identifierLabel(identifierId: string) {
   const option = productIdentificationOptions.value.find((candidate) => candidate.goodIdentificationTypeId === identifierId)
 
@@ -137,3 +153,12 @@ function updatePref(key: keyof ProductIdentificationPref, value: string) {
   productIdentificationStore.setProductIdentificationPref(productStoreId.value, { ...productIdentificationPref.value, [key]: value })
 }
 </script>
+
+<style>
+/* Not scoped: the popover renders outside this component. The choices carry product counts, so the
+   popover takes their width instead of truncating them (as Order Routing's inventory sort does). */
+ion-popover.product-identifier-popover {
+  --width: max-content;
+  --max-width: calc(100vw - var(--spacer-base) - var(--spacer-base));
+}
+</style>

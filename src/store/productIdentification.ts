@@ -1,11 +1,12 @@
 import { translate } from "@common"
 import { defineStore } from "pinia"
 import { fetchGoodIdentificationTypes, fetchProductIdentificationSetting, storeProductIdentificationSetting } from "@/api/productIdentification"
-import { runProductSolrQuery, solrDocs } from "@/api/solr"
+import { runProductSolrQuery, solrDocs, solrTotal } from "@/api/solr"
 import {
   ALWAYS_OFFERED_IDENTIFICATION_TYPES, DEFAULT_PRODUCT_IDENTIFICATION_PREF, PRODUCT_DOCUMENT_IDENTIFIERS,
   type ProductIdentificationOption, type ProductIdentificationPref, parseProductIdentificationPref
 } from "@/domain/product/identification"
+import { identifierCoveragePayload } from "@/domain/solr/productQuery"
 import logger from "@/logger"
 import { showToast } from "@/utils"
 
@@ -16,12 +17,16 @@ export const useProductIdentificationStore = defineStore("productIdentification"
     productIdentificationPref: { ...DEFAULT_PRODUCT_IDENTIFICATION_PREF } as ProductIdentificationPref,
     productIdentificationOptions: [] as ProductIdentificationOption[],
     sampleProducts: [] as Record<string, unknown>[],
-    currentSampleProduct: null as Record<string, unknown> | null
+    currentSampleProduct: null as Record<string, unknown> | null,
+    /** Products that have each identifier, by option id, out of identifierCoverageTotal. */
+    identifierCoverage: {} as Record<string, number>,
+    identifierCoverageTotal: 0
   }),
   getters: {
     getProductIdentificationPref: (state) => state.productIdentificationPref,
     getProductIdentificationOptions: (state) => state.productIdentificationOptions,
-    getCurrentSampleProduct: (state) => state.currentSampleProduct
+    getCurrentSampleProduct: (state) => state.currentSampleProduct,
+    getIdentifierCoverage: (state) => state.identifierCoverage
   },
   actions: {
     async fetchProductIdentificationPref(productStoreId: string) {
@@ -62,6 +67,28 @@ export const useProductIdentificationStore = defineStore("productIdentification"
         .filter((option) => option.goodIdentificationTypeId)
         .map((option) => [option.goodIdentificationTypeId, option]))
       this.productIdentificationOptions = [...options.values()]
+      await this.fetchIdentifierCoverage()
+    },
+    async fetchIdentifierCoverage() {
+      const documentFields = new Set(PRODUCT_DOCUMENT_IDENTIFIERS.map((option) => option.goodIdentificationTypeId))
+      const identifiers = this.productIdentificationOptions.map((option) => ({
+        id: option.goodIdentificationTypeId,
+        isDocumentField: documentFields.has(option.goodIdentificationTypeId)
+      }))
+      try {
+        const response = await runProductSolrQuery(identifierCoveragePayload(identifiers))
+        this.identifierCoverage = Object.fromEntries(identifiers.flatMap(({ id }, index) => {
+          const count = response.facets?.[`i${index}`]?.count
+
+          return typeof count === "number" ? [[id, count]] : []
+        }))
+        this.identifierCoverageTotal = solrTotal(response)
+      } catch (error) {
+        // The options still work without counts.
+        logger.error("Failed to count products by identifier", error)
+        this.identifierCoverage = {}
+        this.identifierCoverageTotal = 0
+      }
     },
     async fetchSampleProducts() {
       // A random sample across the catalog: the first documents in index order are often variants of

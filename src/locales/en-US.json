@@ -130,5 +130,7 @@
   "Loading more products": "Loading more products",
   "No {identifier} on this product, so rows show its name.": "No {identifier} on this product, so rows show its name.",
   "No {identifier} on this product.": "No {identifier} on this product.",
-  "SKU": "SKU"
+  "SKU": "SKU",
+  "{identifier} ({count} products)": "{identifier} ({count} products)",
+  "{identifier} (no products)": "{identifier} (no products)"
 }
