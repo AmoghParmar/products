@@ -47,7 +47,16 @@
       </div>
     </ProductIdentity>
 
+    <!-- Without sales data (still loading, or the lookup failed) the column claims nothing. -->
     <div
+      v-if="!spark"
+      slot="end"
+      class="row-spark"
+    >
+      <ion-note>-</ion-note>
+    </div>
+    <div
+      v-else
       slot="end"
       class="row-spark"
       :title="sparkTitle"

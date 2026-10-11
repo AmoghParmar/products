@@ -1,10 +1,11 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/vue-query"
 import { storeToRefs } from "pinia"
 import { computed } from "vue"
+import { useRowSales } from "@/composables/useRowSales"
 import { PRODUCT_SORT_CHOICES } from "@/domain/product/sort"
 import { DEFAULT_PRODUCT_SORT, isPriceSort, listPriceField } from "@/domain/solr/productQuery"
 import { productStoresOptions, productTypesOptions } from "@/queries/catalog"
-import { groupIdFacetsOptions, rowSalesAnalyticsOptions, tagFacetsOptions, workbenchSearchOptions } from "@/queries/products"
+import { groupIdFacetsOptions, tagFacetsOptions, workbenchSearchOptions } from "@/queries/products"
 import { useUserStore } from "@/store/user"
 import { useWorkbenchStore } from "@/stores/workbench"
 
@@ -42,12 +43,7 @@ export function useProductWorkbench() {
 
   const products = computed(() => searchQuery.data.value?.pages.flatMap((page) => page.products) ?? [])
   const visibleProductIds = computed(() => products.value.map((product) => product.productId))
-  const rowSalesQuery = useQuery(computed(() => rowSalesAnalyticsOptions(visibleProductIds.value)))
-  const rowSales = computed(() => rowSalesQuery.data.value ?? {})
-  const rowSalesMax = computed(() => Math.max(
-    0,
-    ...Object.values(rowSales.value).flatMap((spark) => spark.series)
-  ))
+  const { rowSales, rowSalesMax } = useRowSales(visibleProductIds)
   const total = computed(() => searchQuery.data.value?.pages[0]?.total ?? 0)
 
   const loadMore = async (done: () => void) => {
