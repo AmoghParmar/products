@@ -6,8 +6,12 @@ import { rowSalesAnalyticsOptions } from "@/queries/products"
  *  row's sparkline shares one scale. A product is absent until the sales have loaded. */
 export function useRowSales(productIds: MaybeRefOrGetter<string[]>) {
   const rowSalesQuery = useQuery(computed(() => rowSalesAnalyticsOptions(toValue(productIds))))
-  const rowSales = computed(() => rowSalesQuery.data.value ?? {})
-  const rowSalesMax = computed(() => Math.max(0, ...Object.values(rowSales.value).flatMap((spark) => spark.series)))
+  const rowSalesMax = computed(() =>
+    Object.values(rowSales.value).reduce(
+      (max, spark) => spark.series.reduce((seriesMax, val) => Math.max(seriesMax, val), max),
+      0
+    )
+  )
 
   return { rowSales, rowSalesMax }
 }

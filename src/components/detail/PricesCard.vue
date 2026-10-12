@@ -2,7 +2,7 @@
   <CardSection :title="translate('Prices')">
     <template #action>
       <ion-button
-        v-if="canCopyFromParent && canEdit && rows.length"
+        v-if="canCopyFromParent && canEdit"
         fill="clear"
         size="small"
         @click="$emit('copyFromParent')"

@@ -72,6 +72,7 @@
         :value="calendarDateInputValue(effectiveValue(field))"
         :show-default-buttons="true"
         @ion-change="pickDate(field, $event.detail.value)"
+        @ion-cancel="dismissDatePopover"
       />
     </ion-popover>
 
@@ -88,7 +89,7 @@
 import { DxpShopifyImg, translate } from "@common"
 import {
   IonButton, IonButtons, IonContent, IonDatetime, IonFab, IonFabButton, IonHeader, IonIcon, IonItem, IonLabel,
-  IonList, IonPopover, IonSpinner, IonThumbnail, IonTitle, IonToolbar, modalController
+  IonList, IonPopover, IonSpinner, IonThumbnail, IonTitle, IonToolbar, modalController, popoverController
 } from "@ionic/vue"
 import { arrowUndoOutline, closeCircleOutline, closeOutline, saveOutline } from "ionicons/icons"
 import { computed, ref, useId } from "vue"
@@ -145,14 +146,21 @@ function canClear(field: ProductCalendarDateField) {
   return isBulk.value ? drafts.value[field] !== null : Boolean(parseCalendarDate(effectiveValue(field)))
 }
 
-function pickDate(field: ProductCalendarDateField, value: unknown) {
+async function dismissDatePopover() {
+  const popover = await popoverController.getTop()
+  if(popover) {
+    await popover.dismiss()
+  }
+}
+
+async function pickDate(field: ProductCalendarDateField, value: unknown) {
   if(typeof value !== "string") {return}
   if(!isBulk.value && calendarDateInputValue(originalValue(field)) === value) {
     delete drafts.value[field]
-
-    return
+  } else {
+    drafts.value[field] = calendarDateFromInput(value)
   }
-  drafts.value[field] = calendarDateFromInput(value)
+  await dismissDatePopover()
 }
 
 function clearDate(field: ProductCalendarDateField) {

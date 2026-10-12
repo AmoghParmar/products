@@ -148,7 +148,7 @@ export function expireProductCategoryMember(productId: string, productCategoryId
   return request({ url: `oms/products/${productId}/categories/expire`, method: "post", data: { productCategoryId, fromDate } })
 }
 
-export async function fetchProductCategories(pageSize = 50): Promise<any> {
+export async function fetchProductCategories(pageSize = 200): Promise<any> {
   return responseList(await request({
     url: "oms/productStores/categories",
     method: "get",

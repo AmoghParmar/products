@@ -99,14 +99,26 @@ const selected = ref(new Set(props.selectedCategoryIds))
 const seen = new Map<string, ProductCategory>()
 
 const searchQuery = useQuery({
-  queryKey: computed(() => ["categorySearch", term.value] as const),
-  queryFn: () => fetchProductCategories(term.value),
+  queryKey: ["productCategories"] as const,
+  queryFn: () => fetchProductCategories(),
   staleTime: 30_000
 })
 
-const candidates = computed(() => searchQuery.data.value ?? [])
-watch(candidates, (categories) => categories.forEach((category) => seen.set(category.productCategoryId, category)), { immediate: true })
+const allCategories = computed(() => searchQuery.data.value ?? [])
+watch(allCategories, (categories) => categories.forEach((category) => seen.set(category.productCategoryId, category)), { immediate: true })
 const isLoading = searchQuery.isLoading
+
+const candidates = computed(() => {
+  const list = allCategories.value
+  const filter = term.value.trim().toLowerCase()
+  if(!filter) {return list}
+
+  return list.filter((category) =>
+    (category.categoryName || "").toLowerCase().includes(filter) ||
+    (category.productCategoryId || "").toLowerCase().includes(filter) ||
+    (category.description || "").toLowerCase().includes(filter)
+  )
+})
 
 const initial = new Set(props.selectedCategoryIds)
 const added = computed(() => [...selected.value].filter((id) => !initial.has(id)))
