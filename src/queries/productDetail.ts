@@ -205,7 +205,7 @@ async function shopifyLinkOwners(shopId: string, shopifyProductIds: string[]): P
 
 /** Shopify variants (products, for a virtual) matching a search on one shop, with the product each is
  *  already linked to, if any. */
-export function shopifyLinkCandidatesOptions(params: { shopId: string; remoteId: string; product: ListingCheckProduct; term: string }) {
+export function shopifyLinkCandidatesOptions(params: { shopId: string; remoteId: string; product: ListingCheckProduct; term: string; enabled?: boolean }) {
   const { shopId, remoteId, product, term } = params
 
   return queryOptions({
@@ -216,14 +216,14 @@ export function shopifyLinkCandidatesOptions(params: { shopId: string; remoteId:
 
       return { candidates, owners: await shopifyLinkOwners(shopId, candidates.map((candidate) => candidate.shopifyProductId)) }
     },
-    enabled: Boolean(shopId && remoteId && term.trim()),
+    enabled: params.enabled !== false && Boolean(shopId && remoteId && term.trim()),
     staleTime: 30_000,
     retry: false
   })
 }
 
 /** What Shopify has for one typed ID on a shop and its 30-day orders. */
-export function shopifyLinkValidationOptions(params: { shopId: string; remoteId: string; product: ListingCheckProduct; shopifyProductId: string }) {
+export function shopifyLinkValidationOptions(params: { shopId: string; remoteId: string; product: ListingCheckProduct; shopifyProductId: string; enabled?: boolean }) {
   const { shopId, remoteId, product } = params
   const shopifyProductId = params.shopifyProductId.trim()
 
@@ -235,7 +235,7 @@ export function shopifyLinkValidationOptions(params: { shopId: string; remoteId:
 
       return parseLinkValidation(product, await runShopifyGraphql(remoteId, queryText, variables))
     },
-    enabled: Boolean(shopId && remoteId && /^\d+$/.test(shopifyProductId)),
+    enabled: params.enabled !== false && Boolean(shopId && remoteId && /^\d+$/.test(shopifyProductId)),
     staleTime: 30_000,
     retry: false
   })
@@ -244,14 +244,14 @@ export function shopifyLinkValidationOptions(params: { shopId: string; remoteId:
 /** The product a typed Shopify ID is already linked to on a shop ("" for none). This is an OMS lookup,
  *  kept apart from the Shopify check so a shop without a connection, or a failing Shopify call, can never
  *  skip it: saving an owned ID would move the link off its product. */
-export function shopifyLinkOwnerOptions(params: { shopId: string; shopifyProductId: string }) {
+export function shopifyLinkOwnerOptions(params: { shopId: string; shopifyProductId: string; enabled?: boolean }) {
   const { shopId } = params
   const shopifyProductId = params.shopifyProductId.trim()
 
   return queryOptions({
     queryKey: qk.shopifyLinks.owner(shopId, shopifyProductId),
     queryFn: async () => (await shopifyLinkOwners(shopId, [shopifyProductId]))[shopifyProductId] ?? "",
-    enabled: Boolean(shopId && /^\d+$/.test(shopifyProductId)),
+    enabled: params.enabled !== false && Boolean(shopId && /^\d+$/.test(shopifyProductId)),
     retry: false
   })
 }

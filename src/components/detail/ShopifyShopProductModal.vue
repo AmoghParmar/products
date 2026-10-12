@@ -292,9 +292,8 @@ const remoteId = computed(() => props.shops.find((shop) => shop.shopId === shopI
 // ---- From Shopify ----
 const term = ref(defaultCandidateSearch(props.product))
 const selectedIds = ref(new Set<string>())
-const candidatesQuery = useQuery(computed(() => ({
-  ...shopifyLinkCandidatesOptions({ shopId: shopId.value, remoteId: remoteId.value, product: props.product, term: term.value }),
-  enabled: mode.value === "search" && Boolean(shopId.value && remoteId.value && term.value.trim())
+const candidatesQuery = useQuery(computed(() => shopifyLinkCandidatesOptions({
+  shopId: shopId.value, remoteId: remoteId.value, product: props.product, term: term.value, enabled: mode.value === "search"
 })))
 const candidates = computed(() => candidatesQuery.data.value?.candidates ?? [])
 const selectedCandidates = computed(() => candidates.value.filter((candidate) => selectedIds.value.has(candidate.shopifyProductId)))
@@ -340,16 +339,14 @@ watch(typedId, (id) => {
   checkTimer = setTimeout(() => { checkedId.value = id }, 500)
 })
 
-const validationQuery = useQuery(computed(() => ({
-  ...shopifyLinkValidationOptions({ shopId: shopId.value, remoteId: remoteId.value, product: props.product, shopifyProductId: checkedId.value }),
-  enabled: mode.value === "manual" && Boolean(shopId.value && remoteId.value && /^\d+$/.test(checkedId.value))
+const validationQuery = useQuery(computed(() => shopifyLinkValidationOptions({
+  shopId: shopId.value, remoteId: remoteId.value, product: props.product, shopifyProductId: checkedId.value, enabled: mode.value === "manual"
 })))
 
 // Which product already has the typed ID on this shop. Asked of OMS on its own, so it is answered even
 // when the shop has no Shopify connection or Shopify can't be reached.
-const ownerQuery = useQuery(computed(() => ({
-  ...shopifyLinkOwnerOptions({ shopId: shopId.value, shopifyProductId: checkedId.value }),
-  enabled: mode.value === "manual" && Boolean(shopId.value && /^\d+$/.test(checkedId.value))
+const ownerQuery = useQuery(computed(() => shopifyLinkOwnerOptions({
+  shopId: shopId.value, shopifyProductId: checkedId.value, enabled: mode.value === "manual"
 })))
 const ownerProductId = computed(() => ownerQuery.data.value ?? "")
 
