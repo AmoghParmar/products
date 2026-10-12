@@ -27,7 +27,8 @@ export const qk = {
   catalog: {
     all: ["catalog"] as const,
     list: (resource: string) => ["catalog", resource] as const,
-    features: () => ["catalog", "features"] as const
+    features: () => ["catalog", "features"] as const,
+    categories: (productStoreId: string) => ["catalog", "categories", productStoreId] as const
   },
   quality: {
     all: ["quality"] as const,

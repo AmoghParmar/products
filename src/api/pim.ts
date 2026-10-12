@@ -148,12 +148,25 @@ export function expireProductCategoryMember(productId: string, productCategoryId
   return request({ url: `oms/products/${productId}/categories/expire`, method: "post", data: { productCategoryId, fromDate } })
 }
 
-export async function fetchProductCategories(pageSize = 200): Promise<any> {
-  return responseList(await request({
-    url: "oms/productStores/categories",
-    method: "get",
-    params: { pageSize, productStoreId: useUserStore().currentProductStore.productStoreId }
-  }))
+const CATEGORY_PAGE_SIZE = 200
+// Stops a backend that ignores pageIndex from looping forever (25 pages = 5,000 categories).
+const CATEGORY_MAX_PAGES = 25
+
+/** Every catalog category of the store, read page by page: the entity list endpoint can't OR-search
+ *  name, id and description, so callers filter the full list themselves. */
+export async function fetchProductCategories(productStoreId: string = useUserStore().currentProductStore.productStoreId): Promise<any[]> {
+  const categories: any[] = []
+  for(let pageIndex = 0; pageIndex < CATEGORY_MAX_PAGES; pageIndex++) {
+    const page = responseList(await request({
+      url: "oms/productStores/categories",
+      method: "get",
+      params: { pageIndex, pageSize: CATEGORY_PAGE_SIZE, productStoreId }
+    }))
+    categories.push(...page)
+    if(page.length < CATEGORY_PAGE_SIZE) {break}
+  }
+
+  return categories
 }
 
 export function addProductCategoryMember(productId: string, productCategoryId: string): Promise<unknown> {

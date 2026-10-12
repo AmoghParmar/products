@@ -265,6 +265,8 @@ function setProductSelection(productId: string, checked: boolean) {
 
 const onInfinite = (event: CustomEvent) => loadMore(() => (event.target as HTMLIonInfiniteScrollElement).complete())
 
+const TAG_BATCH_SIZE = 5
+
 const onTagSelected = async (selectedTags: string[]) => {
   isAddTagModalOpen.value = false
   const ids = [...selectedProductIds.value]
@@ -273,19 +275,20 @@ const onTagSelected = async (selectedTags: string[]) => {
   const loading = await loadingController.create({ message: translate("Updating products...") })
   await loading.present()
 
+  // One product's tags go out together, a few products at a time, so a large selection doesn't
+  // wait on every request in turn or flood the backend.
+  const tagProduct = async (productId: string) => {
+    const results = await Promise.allSettled(selectedTags.map((tag) => addProductKeyword(productId, tag)))
+    triggerSolrIndex(productId)
+
+    return results.some((result) => result.status === "rejected")
+  }
+
   let failed = 0
   try {
-    for(const productId of ids) {
-      let productFailed = false
-      for(const tag of selectedTags) {
-        try {
-          await addProductKeyword(productId, tag)
-        } catch {
-          productFailed = true
-        }
-      }
-      if(productFailed) {failed++}
-      triggerSolrIndex(productId)
+    for(let start = 0; start < ids.length; start += TAG_BATCH_SIZE) {
+      const batchFailures = await Promise.all(ids.slice(start, start + TAG_BATCH_SIZE).map(tagProduct))
+      failed += batchFailures.filter(Boolean).length
     }
     if(failed) {
       toast.error(null, translate("Could not add tags to {failed} of {count} products", { failed, count: ids.length }))

@@ -63,7 +63,8 @@ import SaveFooter from "@/components/common/SaveFooter.vue"
 import { type PriceRow, priceTypeLabel } from "@/domain/product/prices"
 
 const props = withDefaults(defineProps<{
-  /** The prices that exist for the store group. Nothing can be added: a price stays until it is replaced. */
+  /** The prices that exist for the store group, plus any copied from the parent and not yet saved.
+   *  A saved price stays until it is replaced. */
   rows: PriceRow[]
   /** One value per row, keyed by row key. */
   draft: Record<string, string>
