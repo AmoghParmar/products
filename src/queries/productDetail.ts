@@ -209,7 +209,7 @@ export function shopifyLinkCandidatesOptions(params: { shopId: string; remoteId:
   const { shopId, remoteId, product, term } = params
 
   return queryOptions({
-    queryKey: ["shopifyLinkCandidates", shopId, product.isVirtual, term.trim()] as const,
+    queryKey: qk.shopifyLinks.candidates(shopId, product.isVirtual, term.trim()),
     queryFn: async (): Promise<{ candidates: ShopifyLinkCandidate[]; owners: Record<string, string> }> => {
       const { queryText, variables } = candidateSearchRequest(product, term)
       const candidates = parseCandidates(product, await runShopifyGraphql(remoteId, queryText, variables))
@@ -222,25 +222,36 @@ export function shopifyLinkCandidatesOptions(params: { shopId: string; remoteId:
   })
 }
 
-/** What Shopify has for one typed ID on a shop, its 30-day orders, and the product it is linked to. */
+/** What Shopify has for one typed ID on a shop and its 30-day orders. */
 export function shopifyLinkValidationOptions(params: { shopId: string; remoteId: string; product: ListingCheckProduct; shopifyProductId: string }) {
   const { shopId, remoteId, product } = params
   const shopifyProductId = params.shopifyProductId.trim()
 
   return queryOptions({
-    queryKey: ["shopifyLinkValidation", shopId, product, shopifyProductId] as const,
-    queryFn: async (): Promise<ShopifyLinkValidation & { ownerProductId: string }> => {
+    queryKey: qk.shopifyLinks.validation(shopId, product, shopifyProductId),
+    queryFn: async (): Promise<ShopifyLinkValidation> => {
       const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
       const { queryText, variables } = linkValidationRequest(product, shopifyProductId, since)
-      const [data, owners] = await Promise.all([
-        runShopifyGraphql(remoteId, queryText, variables),
-        shopifyLinkOwners(shopId, [shopifyProductId])
-      ])
 
-      return { ...parseLinkValidation(product, data), ownerProductId: owners[shopifyProductId] ?? "" }
+      return parseLinkValidation(product, await runShopifyGraphql(remoteId, queryText, variables))
     },
     enabled: Boolean(shopId && remoteId && /^\d+$/.test(shopifyProductId)),
     staleTime: 30_000,
+    retry: false
+  })
+}
+
+/** The product a typed Shopify ID is already linked to on a shop ("" for none). This is an OMS lookup,
+ *  kept apart from the Shopify check so a shop without a connection, or a failing Shopify call, can never
+ *  skip it: saving an owned ID would move the link off its product. */
+export function shopifyLinkOwnerOptions(params: { shopId: string; shopifyProductId: string }) {
+  const { shopId } = params
+  const shopifyProductId = params.shopifyProductId.trim()
+
+  return queryOptions({
+    queryKey: qk.shopifyLinks.owner(shopId, shopifyProductId),
+    queryFn: async () => (await shopifyLinkOwners(shopId, [shopifyProductId]))[shopifyProductId] ?? "",
+    enabled: Boolean(shopId && /^\d+$/.test(shopifyProductId)),
     retry: false
   })
 }

@@ -82,7 +82,10 @@ describe("replacing a price", () => {
   it("gives the new price the purpose of the price it replaces, PURCHASE when there is none", () => {
     const listing = price({ productPricePurposeId: "LISTING", fromDate: "2026-06-02T00:00:00Z" })
 
-    expect(purposeForNewPrice([price({}), listing])).toBe("LISTING")
+    // A newer LISTING price never displaces PURCHASE, which orders and the connector read.
+    expect(purposeForNewPrice([price({}), listing])).toBe("PURCHASE")
+    expect(purposeForNewPrice([listing])).toBe("LISTING")
+    expect(purposeForNewPrice([price({ productPricePurposeId: "" }), listing])).toBe("PURCHASE")
     expect(purposeForNewPrice([])).toBe(DEFAULT_PRICE_PURPOSE)
   })
 })

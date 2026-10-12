@@ -139,6 +139,7 @@
         <PricesCard
           :rows="priceRows"
           :draft="priceDraft.draft"
+          :saved="priceSource"
           :dirty="priceDraft.dirty.value"
           :saving="pricesSaving"
           :stale-under-edit="priceDraft.staleUnderEdit.value"
@@ -153,7 +154,8 @@
           :shopify-shop-products="shopifyShopProducts"
           :product-id="editingProductId"
           :product="shopifyListingProduct"
-          :saving="shopifyMutations.upsert.isPending.value || shopifyMutations.remove.isPending.value"
+          :product-ready="shopifyListingProductReady"
+          :saving="shopifyMutations.upsert.isPending.value || shopifyMutations.remove.isPending.value || shopifyMutations.replace.isPending.value"
           :can-edit="canEditProduct"
           @upsert="onUpsertShopifyShopProduct"
           @replace="onReplaceShopifyShopProduct"
@@ -306,7 +308,7 @@ const {
   variants, selectedVariantId, selectVariant,
   featureOptions, hasFeatureSelection, selectedVariantSelection, selectByFeature,
   core, coreLoading, coreError, coreErrorValue, refetchCore,
-  identifications, associationGroups,
+  identifications, identificationsLoading, associationGroups,
   familyFeatureAxes, editingFeatureAxes, featureFamilyId,
   audit, productTypes, boxTypes,
   anchorTags, selectedVariantTags,
@@ -470,6 +472,7 @@ const shopifyListingProduct = computed(() => ({
   isVirtual: Boolean(core.value?.isVirtual),
   childSku: variants.value.find((variant) => variant.sku)?.sku ?? ""
 }))
+const shopifyListingProductReady = computed(() => core.value?.productId === editingProductId.value && !identificationsLoading.value)
 const onUpsertShopifyShopProduct = (payload: ShopifyLinkPayload) => {
   if(!canEditProduct.value) {return}
   shopifyMutations.upsert.mutateAsync(payload).catch((error) => toast.error(error, translate("Could not save Shopify shop product")))

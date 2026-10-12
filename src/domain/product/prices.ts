@@ -67,11 +67,16 @@ export function priceRowsForStoreGroup(prices: ProductPrice[], productStoreGroup
     a.currencyUomId.localeCompare(b.currencyUomId))
 }
 
-/** A price that replaces existing ones keeps their purpose, so the connector keeps finding it. */
+/** A price that replaces existing ones keeps their purpose, so the connector keeps finding it. When a
+ *  PURCHASE price is among them it stays PURCHASE: orders and the Shopify connector read only PURCHASE,
+ *  and every replaced price is retired, so a LISTING replacement would leave the product without one. */
 export function purposeForNewPrice(replacedPrices: ProductPrice[]): string {
+  const purposes = replacedPrices.map((price) => price.productPricePurposeId || DEFAULT_PRICE_PURPOSE)
+  if(!purposes.length || purposes.includes(DEFAULT_PRICE_PURPOSE)) {return DEFAULT_PRICE_PURPOSE}
+
   const newest = replacedPrices.slice().sort((a, b) => priceDateMs(b.fromDate) - priceDateMs(a.fromDate))[0]
 
-  return newest?.productPricePurposeId || DEFAULT_PRICE_PURPOSE
+  return newest.productPricePurposeId || DEFAULT_PRICE_PURPOSE
 }
 
 function typeRank(productPriceTypeId: string): number {

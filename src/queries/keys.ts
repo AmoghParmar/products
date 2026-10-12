@@ -24,6 +24,14 @@ export const qk = {
     shopifyShopProducts: (productId: string) => ["product", productId, "shopifyShopProducts"] as const,
     shopifyListingChecks: (productId: string, signature: string) => ["product", productId, "shopifyListingChecks", signature] as const
   },
+  /** The link pickers' lookups: Shopify search, a typed ID's Shopify data, and which product owns an ID.
+   *  A saved or removed link invalidates the whole subtree, since ownership is not product-scoped. */
+  shopifyLinks: {
+    all: ["shopifyLinks"] as const,
+    candidates: (shopId: string, isVirtual: boolean, term: string) => ["shopifyLinks", "candidates", shopId, isVirtual, term] as const,
+    validation: (shopId: string, product: unknown, shopifyProductId: string) => ["shopifyLinks", "validation", shopId, product, shopifyProductId] as const,
+    owner: (shopId: string, shopifyProductId: string) => ["shopifyLinks", "owner", shopId, shopifyProductId] as const
+  },
   catalog: {
     all: ["catalog"] as const,
     list: (resource: string) => ["catalog", resource] as const,

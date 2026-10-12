@@ -270,7 +270,7 @@ import { familyRouteFor } from "@/domain/product/family"
 import { type ShopifyLinkCandidate, defaultCandidateSearch } from "@/domain/shopify/linkCandidates"
 import type { ListingCheckProduct } from "@/domain/shopify/listingCheck"
 import type { ShopifyShop, ShopifyShopProduct } from "@/domain/types/product"
-import { shopifyLinkCandidatesOptions, shopifyLinkValidationOptions } from "@/queries/productDetail"
+import { shopifyLinkCandidatesOptions, shopifyLinkOwnerOptions, shopifyLinkValidationOptions } from "@/queries/productDetail"
 
 const props = defineProps<{
   shops: ShopifyShop[]
@@ -345,6 +345,14 @@ const validationQuery = useQuery(computed(() => ({
   enabled: mode.value === "manual" && Boolean(shopId.value && remoteId.value && /^\d+$/.test(checkedId.value))
 })))
 
+// Which product already has the typed ID on this shop. Asked of OMS on its own, so it is answered even
+// when the shop has no Shopify connection or Shopify can't be reached.
+const ownerQuery = useQuery(computed(() => ({
+  ...shopifyLinkOwnerOptions({ shopId: shopId.value, shopifyProductId: checkedId.value }),
+  enabled: mode.value === "manual" && Boolean(shopId.value && /^\d+$/.test(checkedId.value))
+})))
+const ownerProductId = computed(() => ownerQuery.data.value ?? "")
+
 // The link being edited keeps its own key; any other existing key is a conflict.
 const isOwnKey = computed(() => Boolean(props.link) && props.link?.shopId === shopId.value && props.link?.shopifyProductId === typedId.value)
 
@@ -369,20 +377,16 @@ const status = computed<ManualStatus>(() => {
 
   if(!typedId.value) {return { ...base, message: translate("Enter the Shopify ID to check it on Shopify."), blocked: true }}
   if(!/^\d+$/.test(typedId.value)) {return { ...base, icon: alertCircleOutline, tone: "warning", message: translate("Shopify IDs are numbers."), blocked: true }}
-  if(!remoteId.value) {
-    return { ...base, icon: alertCircleOutline, tone: "warning", message: translate("This shop has no Shopify connection to check against."), needsAcknowledgement: true }
+  if(checkedId.value !== typedId.value || ownerQuery.isFetching.value) {return { ...base, checking: true, message: translate("Checking Shopify"), blocked: true }}
+  // Without the owner check a save could silently move another product's link, so it blocks the save.
+  if(ownerQuery.isError.value) {
+    return { ...base, icon: alertCircleOutline, tone: "warning", message: translate("Could not check which product has this Shopify ID."), blocked: true }
   }
-  if(checkedId.value !== typedId.value || validationQuery.isFetching.value) {return { ...base, checking: true, message: translate("Checking Shopify"), blocked: true }}
-  if(validationQuery.isError.value) {
-    return { ...base, icon: alertCircleOutline, tone: "warning", message: translate("Could not check Shopify."), needsAcknowledgement: true }
-  }
-
-  const result = validationQuery.data.value
-  if(!result) {return { ...base, checking: true, message: translate("Checking Shopify"), blocked: true }}
+  if(ownerQuery.data.value === undefined) {return { ...base, checking: true, message: translate("Checking Shopify"), blocked: true }}
 
   // A Shopify ID belongs to one product per shop; saving it here would move it off its product.
-  if(result.ownerProductId && !isOwnKey.value) {
-    return result.ownerProductId === props.productId
+  if(ownerProductId.value && !isOwnKey.value) {
+    return ownerProductId.value === props.productId
       ? { ...base, icon: closeCircleOutline, tone: "danger", message: translate("This product is already linked to this Shopify ID on this shop."), blocked: true }
       : {
         ...base,
@@ -393,6 +397,17 @@ const status = computed<ManualStatus>(() => {
         blocked: true
       }
   }
+
+  if(!remoteId.value) {
+    return { ...base, icon: alertCircleOutline, tone: "warning", message: translate("This shop has no Shopify connection to check against."), needsAcknowledgement: true }
+  }
+  if(validationQuery.isFetching.value) {return { ...base, checking: true, message: translate("Checking Shopify"), blocked: true }}
+  if(validationQuery.isError.value) {
+    return { ...base, icon: alertCircleOutline, tone: "warning", message: translate("Could not check Shopify."), needsAcknowledgement: true }
+  }
+
+  const result = validationQuery.data.value
+  if(!result) {return { ...base, checking: true, message: translate("Checking Shopify"), blocked: true }}
 
   if(!result.found) {
     return { ...base, icon: alertCircleOutline, tone: "warning", message: translate("Not found on Shopify."), needsAcknowledgement: true }
@@ -428,7 +443,7 @@ watch(() => status.value.verified, (verified) => {
 const router = useRouter()
 const { identityOf } = useProductIdentity()
 const blockingOwnerId = computed(() => {
-  const owner = validationQuery.data.value?.ownerProductId ?? ""
+  const owner = ownerProductId.value
 
   return mode.value === "manual" && status.value.blocked && owner && owner !== props.productId && !isOwnKey.value ? owner : ""
 })

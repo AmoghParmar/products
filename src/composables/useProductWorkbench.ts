@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/vue-query"
 import { storeToRefs } from "pinia"
-import { computed } from "vue"
+import { computed, watch } from "vue"
 import { useRowSales } from "@/composables/useRowSales"
 import { PRODUCT_SORT_CHOICES } from "@/domain/product/sort"
 import { DEFAULT_PRODUCT_SORT, isPriceSort, listPriceField } from "@/domain/solr/productQuery"
@@ -25,8 +25,18 @@ export function useProductWorkbench() {
     priceStore.value?.defaultCurrencyUomId || priceStore.value?.currencyUomId
   ))
   const sortChoices = computed(() => PRODUCT_SORT_CHOICES.filter((choice) => priceField.value || !isPriceSort(choice.value)))
-  // A price sort with no store price to sort by shows, and runs, as the default order.
-  const activeSort = computed(() => isPriceSort(sort.value) && !priceField.value ? DEFAULT_PRODUCT_SORT : sort.value)
+  // A price sort with no store price to sort by shows, and runs, as the default order; so does a sort
+  // saved before the choices were renamed ("Alphabet", "Updated", "Created").
+  const activeSort = computed(() => {
+    if(!PRODUCT_SORT_CHOICES.some((choice) => choice.value === sort.value)) {return DEFAULT_PRODUCT_SORT}
+
+    return isPriceSort(sort.value) && !priceField.value ? DEFAULT_PRODUCT_SORT : sort.value
+  })
+  // Save the order that is shown: otherwise the old one stays saved, can't be cleared (picking the
+  // already-checked choice changes nothing), and returns on its own when a store price appears.
+  watch(activeSort, (value) => {
+    if(sort.value !== value) {sort.value = value}
+  }, { immediate: true })
 
   const searchParams = computed(() => ({
     ...workbench.searchParams,

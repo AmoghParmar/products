@@ -31,8 +31,9 @@ const userProfile = computed(() => userStore.getUserProfile)
 const productIdentificationStore = useProductIdentificationStore()
 
 // Product rows read the current ProductStore's identifier preference, so load it whenever the store changes.
+// No store (logged out, or "None") resets it to the default rather than keeping the last store's.
 watch(() => userStore.getCurrentProductStore?.productStoreId, (productStoreId) => {
-  if(productStoreId) {productIdentificationStore.fetchProductIdentificationPref(productStoreId)}
+  productIdentificationStore.fetchProductIdentificationPref(productStoreId ?? "")
 }, { immediate: true })
 
 async function presentLoader(options: { message?: string, backdropDismiss?: boolean } = { message: "", backdropDismiss: true }) {

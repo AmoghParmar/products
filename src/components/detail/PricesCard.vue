@@ -68,12 +68,15 @@ const props = withDefaults(defineProps<{
   rows: PriceRow[]
   /** One value per row, keyed by row key. */
   draft: Record<string, string>
+  /** The saved value of each existing row, so only the prices being changed are checked. */
+  saved?: Record<string, string>
   dirty: boolean
   saving: boolean
   staleUnderEdit: boolean
   canCopyFromParent?: boolean
   canEdit?: boolean
 }>(), {
+  saved: () => ({}),
   canEdit: true
 })
 
@@ -86,7 +89,8 @@ const emit = defineEmits<{
 const touched = ref(false)
 const errors = ref<Record<string, string>>({})
 
-// A shown price is always replaced by another price, never cleared, so each needs a positive number.
+// A changed price replaces the saved one and is never cleared, so it needs a positive number. Prices left
+// as they are aren't checked: a saved 0 must not block saving another one.
 const priceError = (value: string | undefined) => {
   const text = (value ?? "").trim()
   if(!text) {return translate("Enter a price")}
@@ -98,6 +102,8 @@ const validate = (): boolean => {
   touched.value = true
   const errs: Record<string, string> = {}
   for(const row of props.rows) {
+    const draftValue = (props.draft[row.key] ?? "").trim()
+    if(props.saved[row.key] !== undefined && draftValue === props.saved[row.key].trim()) {continue}
     const error = priceError(props.draft[row.key])
     if(error) {errs[row.key] = error}
   }

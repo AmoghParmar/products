@@ -18,6 +18,8 @@ export function useShopifyShopProductMutations(productId: () => string, parentPr
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: listKey() })
+    // Which product owns a Shopify ID just changed, for every product's pickers.
+    queryClient.invalidateQueries({ queryKey: qk.shopifyLinks.all })
     triggerSolrIndex(parentProductId())
   }
 

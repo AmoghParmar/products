@@ -178,8 +178,12 @@ const props = withDefaults(defineProps<{
   /** The product being edited, for the live Shopify check. */
   productId: string
   product: ListingCheckProduct
+  /** False while the product's own data is loading, when `product` is still a placeholder: a check or an
+   *  edit then would look the Shopify ID up as the wrong kind of product. */
+  productReady?: boolean
   canEdit?: boolean
 }>(), {
+  productReady: true,
   canEdit: true
 })
 
@@ -220,7 +224,7 @@ const checksQuery = useQuery(computed(() => shopifyListingChecksOptions({
   product: props.product,
   links: props.shopifyShopProducts,
   shops: shops.value,
-  enabled: isVisible.value
+  enabled: isVisible.value && props.productReady
 })))
 const isChecking = computed(() => checksQuery.isFetching.value && !checksQuery.isPlaceholderData.value && !checksQuery.data.value)
 
@@ -261,7 +265,7 @@ function countText(value: number | null | undefined) {
 // with a suggestion it starts from the values found on Shopify.
 let isEditorOpen = false
 async function openEditor(link?: ShopifyShopProduct, suggested?: ListingCheckSuggestion) {
-  if(!props.canEdit || isEditorOpen) {return}
+  if(!props.canEdit || !props.productReady || isEditorOpen) {return}
 
   isEditorOpen = true
   try {

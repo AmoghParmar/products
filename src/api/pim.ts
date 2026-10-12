@@ -144,8 +144,10 @@ export function fetchProductCategoryMembers(productId: string): Promise<Raw[]> {
   } }).then(responseList)
 }
 
+/** ProductCategoryMember is keyed by category, product and fromDate, so storing the row again with a
+ *  thruDate ends that membership (oms has no separate expire resource). */
 export function expireProductCategoryMember(productId: string, productCategoryId: string, fromDate: string): Promise<unknown> {
-  return request({ url: `oms/products/${productId}/categories/expire`, method: "post", data: { productCategoryId, fromDate } })
+  return request({ url: `oms/products/${productId}/categories`, method: "post", data: { productCategoryId, fromDate, thruDate: Date.now() } })
 }
 
 const CATEGORY_PAGE_SIZE = 200
@@ -166,7 +168,8 @@ export async function fetchProductCategories(productStoreId: string = useUserSto
     if(page.length < CATEGORY_PAGE_SIZE) {break}
   }
 
-  return categories
+  // The view has a row per catalog and catalog category type, so one category can come back more than once.
+  return [...new Map(categories.map((category) => [category.productCategoryId, category])).values()]
 }
 
 export function addProductCategoryMember(productId: string, productCategoryId: string): Promise<unknown> {

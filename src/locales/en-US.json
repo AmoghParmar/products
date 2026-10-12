@@ -175,6 +175,7 @@
   "This shop has no Shopify connection to check against.": "This shop has no Shopify connection to check against.",
   "Checking Shopify": "Checking Shopify",
   "Could not check Shopify.": "Could not check Shopify.",
+  "Could not check which product has this Shopify ID.": "Could not check which product has this Shopify ID.",
   "This product is already linked to this Shopify ID on this shop.": "This product is already linked to this Shopify ID on this shop.",
   "A Shopify ID can be linked to one product only. Unlink it there first.": "A Shopify ID can be linked to one product only. Unlink it there first.",
   "Not found on Shopify.": "Not found on Shopify.",

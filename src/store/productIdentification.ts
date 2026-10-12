@@ -10,6 +10,11 @@ import { identifierCoveragePayload } from "@/domain/solr/productQuery"
 import logger from "@/logger"
 import { showToast } from "@/utils"
 
+// The store whose preference was asked for last: a slower answer for a store already left is dropped.
+let requestedPrefStoreId = ""
+// Saves go out one after another, so a quick second change can never land before the first.
+let pendingSave: Promise<unknown> = Promise.resolve()
+
 /** The ProductStore's product identifier preference (PRDT_IDEN_PREF), ported from the other
  *  AccxUI apps' product store settings so rows show the same primary and secondary identifiers. */
 export const useProductIdentificationStore = defineStore("productIdentification", {
@@ -30,26 +35,37 @@ export const useProductIdentificationStore = defineStore("productIdentification"
   },
   actions: {
     async fetchProductIdentificationPref(productStoreId: string) {
+      requestedPrefStoreId = productStoreId
       if(!productStoreId) {
         this.productIdentificationPref = { ...DEFAULT_PRODUCT_IDENTIFICATION_PREF }
 
         return
       }
 
+      let pref: ProductIdentificationPref
       try {
-        this.productIdentificationPref = parseProductIdentificationPref(await fetchProductIdentificationSetting(productStoreId))
+        pref = parseProductIdentificationPref(await fetchProductIdentificationSetting(productStoreId))
       } catch (error) {
         logger.error("Failed to fetch the product identifier setting", error)
+        // Never keep the previous store's preference: rows would show it, and a change would save it here.
+        pref = { ...DEFAULT_PRODUCT_IDENTIFICATION_PREF }
       }
+      if(requestedPrefStoreId === productStoreId) {this.productIdentificationPref = pref}
     },
     async setProductIdentificationPref(productStoreId: string, productIdentificationPref: ProductIdentificationPref) {
+      // Shown at once, so a second change made before this save returns builds on it.
+      this.productIdentificationPref = productIdentificationPref
+      const save = pendingSave.then(() => storeProductIdentificationSetting(productStoreId, JSON.stringify(productIdentificationPref)))
+      pendingSave = save.catch(() => undefined)
       try {
-        await storeProductIdentificationSetting(productStoreId, JSON.stringify(productIdentificationPref))
-        this.productIdentificationPref = productIdentificationPref
+        await save
         await showToast(translate("Product Store setting updated successfully."))
       } catch (error) {
         logger.error("Failed to update the product identifier setting", error)
         await showToast(translate("Failed to update Product Store setting."))
+        // Show what the store really has, so the select matches it and the choice can be made again.
+        await pendingSave
+        await this.fetchProductIdentificationPref(productStoreId)
       }
     },
     async prepareProductIdentifierOptions() {
