@@ -67,7 +67,7 @@ describe("user store permissions", () => {
   it("loads Moqui permissions from admin/user/permissions with pagination", async () => {
     vi.mocked(api)
       .mockResolvedValueOnce(permissionResponse([{ permissionId: "PIM_PRODUCT_VIEW" }, { permissionId: "PIM_FEATURE_CREATE" }]))
-      .mockResolvedValueOnce(permissionResponse([{ permissionId: "SEARCH_UPDATE" }]))
+      .mockResolvedValueOnce(permissionResponse([{ permissionId: "SEARCH_UPDATE" }, { permissionId: "PRODUCTS_APP_VIEW" }]))
       .mockResolvedValueOnce(permissionResponse([]))
 
     const userStore = useUserStore()
@@ -83,7 +83,7 @@ describe("user store permissions", () => {
       method: "GET",
       params: { viewIndex: 1, viewSize: 200 }
     })
-    expect(userStore.permissions).toEqual(["PIM_PRODUCT_VIEW", "PIM_FEATURE_CREATE", "SEARCH_UPDATE"])
+    expect(userStore.permissions).toEqual(["PIM_PRODUCT_VIEW", "PIM_FEATURE_CREATE", "SEARCH_UPDATE", "PRODUCTS_APP_VIEW"])
     expect(userStore.fetchStatus.permissions).toBe("success")
   })
 

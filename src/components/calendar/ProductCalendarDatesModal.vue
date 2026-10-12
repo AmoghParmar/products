@@ -145,6 +145,7 @@ function canClear(field: ProductCalendarDateField) {
   return isBulk.value ? drafts.value[field] !== null : Boolean(parseCalendarDate(effectiveValue(field)))
 }
 
+// The datetime's default Done and Cancel buttons close the popover around it themselves.
 function pickDate(field: ProductCalendarDateField, value: unknown) {
   if(typeof value !== "string") {return}
   if(!isBulk.value && calendarDateInputValue(originalValue(field)) === value) {

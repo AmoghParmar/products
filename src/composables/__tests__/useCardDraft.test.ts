@@ -48,6 +48,24 @@ describe("useCardDraft", () => {
     expect(card.staleUnderEdit.value).toBe(false)
   })
 
+  it("counts a key added after seeding as an edit and holds it through a refetch", async () => {
+    const source = ref<Record<string, string> | null>({})
+    const card = useCardDraft(source)
+    expect(card.dirty.value).toBe(false)
+
+    card.draft["DEFAULT_PRICE|USD"] = "12"
+    expect(card.dirty.value).toBe(true)
+    expect(card.changes()).toEqual({ "DEFAULT_PRICE|USD": "12" })
+
+    source.value = {}
+    await nextTick()
+    expect(card.draft["DEFAULT_PRICE|USD"]).toBe("12") // dirty → copied value held
+
+    card.reset()
+    expect(card.draft["DEFAULT_PRICE|USD"]).toBeUndefined()
+    expect(card.dirty.value).toBe(false)
+  })
+
   it("treats empty string and null as equal (clearing semantics)", async () => {
     const source = ref<{ note: string | null } | null>({ note: null })
     const card = useCardDraft(source)

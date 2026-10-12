@@ -145,7 +145,7 @@
           :can-copy-from-parent="segment === 'variant' && hasParent"
           :can-edit="canEditProduct"
           @save="onSavePrices"
-          @reset="priceDraft.reset"
+          @reset="resetPrices"
           @copy-from-parent="onCopyPricesFromParent"
         />
 
@@ -269,7 +269,7 @@ import { useCardDraft } from "@/composables/useCardDraft"
 import { ASSOC_TYPE } from "@/domain/normalize/association"
 import { FEATURE_APPL_TYPE } from "@/domain/normalize/feature"
 import { productDisplayName } from "@/domain/normalize/product"
-import { DEFAULT_PRICE_PURPOSE, activePricesForRow, priceRowsForStoreGroup, purposeForNewPrice } from "@/domain/product/prices"
+import { DEFAULT_PRICE_PURPOSE, type PriceRow, activePricesForRow, priceRowsForStoreGroup, purposeForNewPrice } from "@/domain/product/prices"
 import type { FeatureAxis, ProductAssociation, ProductCategory, ProductCategoryMembership, ProductCore, ProductFeatureApplication, ProductPrice, ProductSummary } from "@/domain/types/product"
 import type { IdentificationCreate, IdentificationKey } from "@/domain/types/pim"
 import { useUserStore } from "@/store/user"
@@ -324,10 +324,19 @@ const categoryMutations = useCategoryMutations(() => editingProductId.value, () 
 const shopifyMutations = useShopifyShopProductMutations(() => editingProductId.value, () => parentProductId.value)
 
 // ---------- prices ----------
-// A price belongs to a store group, not a single store. Only the prices that already exist for the
-// selected store's group are shown, one per price type and currency; none can be added here.
+// A price belongs to a store group, not a single store. The prices that already exist for the
+// selected store's group are shown, one per price type and currency. The only way to add one is to
+// copy the parent's prices onto a variant; the copied rows stay listed until they are saved or reset.
 const storeCurrencyUomId = computed(() => currentProductStore.value.defaultCurrencyUomId || currentProductStore.value.currencyUomId)
-const priceRows = computed(() => priceRowsForStoreGroup(prices.value, currentProductStore.value.primaryStoreGroupId, storeCurrencyUomId.value))
+const copiedPriceRows = ref<PriceRow[]>([])
+const storeGroupPriceRows = computed(() => priceRowsForStoreGroup(prices.value, currentProductStore.value.primaryStoreGroupId, storeCurrencyUomId.value))
+const priceRows = computed(() => {
+  const base = storeGroupPriceRows.value
+  const baseKeys = new Set(base.map((row) => row.key))
+  const additions = copiedPriceRows.value.filter((row) => !baseKeys.has(row.key))
+
+  return [...base, ...additions]
+})
 
 const expirePricePayload = (price: ProductPrice, thruDate: string) => ({
   productPriceTypeId: price.productPriceTypeId,
@@ -340,7 +349,7 @@ const expirePricePayload = (price: ProductPrice, thruDate: string) => ({
 })
 
 const priceSource = computed(() => {
-  const entries = priceRows.value.map((row) => [row.key, row.price.price.toString()])
+  const entries = storeGroupPriceRows.value.map((row) => [row.key, row.price.price.toString()])
 
   return Object.fromEntries(entries) as Record<string, string>
 })
@@ -348,9 +357,14 @@ const priceSource = computed(() => {
 const priceDraft = useCardDraft(priceSource)
 const pricesSaving = ref(false)
 
-// When switching between parent and variant, force-reset the draft so stale edits
-// from the previous product don't keep dirty=true on the new one.
-watch(editingProductId, () => priceDraft.reset())
+const resetPrices = () => {
+  priceDraft.reset()
+  copiedPriceRows.value = []
+}
+
+// When switching between parent and variant, or to a store in another store group, force-reset the
+// draft so stale edits and copied rows from the previous one don't carry over.
+watch([editingProductId, () => currentProductStore.value.productStoreId], () => resetPrices())
 
 const onSavePrices = async () => {
   if(!canEditProduct.value) {return}
@@ -373,7 +387,7 @@ const onSavePrices = async () => {
           productPriceTypeId: row.productPriceTypeId,
           currencyUomId: row.currencyUomId,
           price: Number(draftVal),
-          productPricePurposeId: purposeForNewPrice(replacedPrices),
+          productPricePurposeId: purposeForNewPrice(replacedPrices.length ? replacedPrices : [row.price]),
           productStoreId: currentProductStore.value.productStoreId,
           productStoreGroupId
         }
@@ -386,6 +400,8 @@ const onSavePrices = async () => {
 
     triggerSolrIndex(editingProductId.value, { indexVariants: false })
     await queryClient.invalidateQueries({ queryKey: qk.product.core(editingProductId.value) })
+    // The refetched prices now hold what was saved: reseed so the copied rows and draft clear together.
+    resetPrices()
     toast.success(translate("Prices saved"))
   } catch(error) {
     toast.error(error, translate("Could not save prices"))
@@ -398,10 +414,15 @@ const onCopyPricesFromParent = async () => {
   if(!canEditProduct.value) {return}
   if(!parentProductId.value) {return}
   const parent = await queryClient.ensureQueryData(productCoreOptions(parentProductId.value))
-  const parentRows = priceRowsForStoreGroup(parent.prices, currentProductStore.value.primaryStoreGroupId)
-  for(const row of priceRows.value) {
-    const parentRow = parentRows.find((candidate) => candidate.key === row.key)
-    if(parentRow) {priceDraft.draft[row.key] = parentRow.price.price.toString()}
+  const parentRows = priceRowsForStoreGroup(parent.prices, currentProductStore.value.primaryStoreGroupId, storeCurrencyUomId.value)
+  if(!parentRows.length) {
+    toast.error(null, translate("Parent product has no prices in this store group."))
+
+    return
+  }
+  copiedPriceRows.value = parentRows
+  for(const parentRow of parentRows) {
+    priceDraft.draft[parentRow.key] = parentRow.price.price.toString()
   }
 }
 

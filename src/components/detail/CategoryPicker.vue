@@ -87,6 +87,8 @@ import { computed, ref, watch } from "vue"
 import { fetchProductCategories } from "@/api/pim"
 import EmptyState from "@/components/EmptyState.vue"
 import type { CategoryPickerResult, ProductCategory } from "@/domain/types/product"
+import { qk } from "@/queries/keys"
+import { useUserStore } from "@/store/user"
 
 const props = defineProps<{
   /** Categories the product is in now; they start checked. */
@@ -98,15 +100,25 @@ const selected = ref(new Set(props.selectedCategoryIds))
 // Every category seen in a search, so a checked one can be saved after the search text changes.
 const seen = new Map<string, ProductCategory>()
 
+const productStoreId = computed(() => useUserStore().currentProductStore.productStoreId)
 const searchQuery = useQuery({
-  queryKey: computed(() => ["categorySearch", term.value] as const),
-  queryFn: () => fetchProductCategories(term.value),
+  queryKey: computed(() => qk.catalog.categories(productStoreId.value)),
+  queryFn: () => fetchProductCategories(productStoreId.value),
   staleTime: 30_000
 })
 
-const candidates = computed(() => searchQuery.data.value ?? [])
-watch(candidates, (categories) => categories.forEach((category) => seen.set(category.productCategoryId, category)), { immediate: true })
+const allCategories = computed(() => searchQuery.data.value ?? [])
+watch(allCategories, (categories) => categories.forEach((category) => seen.set(category.productCategoryId, category)), { immediate: true })
 const isLoading = searchQuery.isLoading
+
+const candidates = computed(() => {
+  const list = allCategories.value
+  const filter = term.value.trim().toLowerCase()
+  if(!filter) {return list}
+
+  return list.filter((category) => [category.categoryName, category.productCategoryId, category.description]
+    .some((text) => (text || "").toLowerCase().includes(filter)))
+})
 
 const initial = new Set(props.selectedCategoryIds)
 const added = computed(() => [...selected.value].filter((id) => !initial.has(id)))

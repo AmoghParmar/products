@@ -4,6 +4,7 @@ import { type Ref, computed, reactive, shallowRef, watch } from "vue"
  *  - reseeds from the source query ONLY while clean (a background refetch never clobbers edits;
  *    instead `staleUnderEdit` flips so the card can offer a reset)
  *  - `changes()` returns the diff-only payload for pim's PATCH semantics
+ *  - a key added to the draft after seeding (e.g. a value copied from the parent) counts as an edit
  *
  *  `seeded` is a ref on purpose: the dirty/stale computeds must track it so they re-evaluate
  *  after the first async seed (a plain closure variable would leave them permanently cached).
@@ -28,10 +29,12 @@ export function useCardDraft<T extends Record<string, any>>(source: Ref<T | null
 
   if(source.value) {seed(source.value)}
 
+  const draftKeys = (base: T) => new Set([...Object.keys(base), ...Object.keys(draft)])
+
   const dirty = computed(() => {
     if(!seeded.value) {return false}
 
-    return Object.keys(seeded.value).some((key) => !valueEquals((draft as any)[key], (seeded.value as any)[key]))
+    return [...draftKeys(seeded.value)].some((key) => !valueEquals((draft as any)[key], (seeded.value as any)[key]))
   })
 
   const staleUnderEdit = computed(() => {
@@ -57,7 +60,7 @@ export function useCardDraft<T extends Record<string, any>>(source: Ref<T | null
   const changes = (): Partial<T> => {
     if(!seeded.value) {return {}}
     const diff: Partial<T> = {}
-    for(const key of Object.keys(seeded.value) as (keyof T)[]) {
+    for(const key of draftKeys(seeded.value) as Set<keyof T>) {
       if(!valueEquals(draft[key], (seeded.value as any)[key])) {diff[key] = draft[key]}
     }
 
