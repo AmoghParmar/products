@@ -1,7 +1,8 @@
 import { defineStore } from "pinia"
+import { DEFAULT_PRODUCT_SORT } from "@/domain/solr/productQuery"
 import type { ProductKind, ProductSearchParams, ProductSortOption } from "@/domain/types/product"
 
-/** Workbench UI state ONLY (filters + selection). Results live in the TanStack cache — the filter
+/** Workbench UI state ONLY (filters and sort). Results live in the TanStack cache — the filter
  *  object this store produces is the search query key. Persisted so a reload keeps the working set. */
 export const useWorkbenchStore = defineStore("workbench", {
   state: () => ({
@@ -11,9 +12,8 @@ export const useWorkbenchStore = defineStore("workbench", {
     productStoreId: "All",
     tags: [] as string[],
     groupIds: [] as string[],
-    sort: "Alphabet" as ProductSortOption,
-    pageSize: 25,
-    selectedProductIds: [] as string[]
+    sort: DEFAULT_PRODUCT_SORT as ProductSortOption,
+    pageSize: 25
   }),
   getters: {
     searchParams(state): ProductSearchParams {
@@ -27,8 +27,7 @@ export const useWorkbenchStore = defineStore("workbench", {
         sort: state.sort,
         pageSize: state.pageSize
       }
-    },
-    selectionCount: (state) => state.selectedProductIds.length
+    }
   },
   actions: {
     toggleTag(tag: string) {
@@ -46,20 +45,8 @@ export const useWorkbenchStore = defineStore("workbench", {
       this.productStoreId = "All"
       this.tags = []
       this.groupIds = []
-      this.sort = "Alphabet"
-      this.clearSelection()
-    },
-    toggleSelected(productId: string) {
-      this.selectedProductIds = this.selectedProductIds.includes(productId)
-        ? this.selectedProductIds.filter((id) => id !== productId)
-        : [...this.selectedProductIds, productId]
-    },
-    selectAll(productIds: string[]) {
-      this.selectedProductIds = [...new Set(productIds)]
-    },
-    clearSelection() {
-      this.selectedProductIds = []
+      this.sort = DEFAULT_PRODUCT_SORT
     }
   },
-  persist: { pick: ["productTypeId", "productKind", "productStoreId", "sort"] }
+  persist: { pick: ["queryString", "productTypeId", "productKind", "productStoreId", "tags", "sort"] }
 })

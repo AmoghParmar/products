@@ -56,6 +56,54 @@ describe("product normalizers", () => {
     expect(core.imageUrl).toBe("http://m")
   })
 
+  it("sorts latest active prices first and keeps price primary-key context", () => {
+    const latestFromDate = Date.UTC(2025, 8, 10, 9, 48, 44, 927)
+    const olderFromDate = Date.UTC(2025, 7, 10, 9, 48, 44, 927)
+    const expiredThruDate = Date.UTC(2025, 6, 10, 9, 48, 44, 927)
+    const core = normalizeProductCore({
+      productId: "P1",
+      prices: [
+        {
+          productPriceTypeId: "DEFAULT_PRICE",
+          productPricePurposeId: "LISTING",
+          currencyUomId: "USD",
+          productStoreId: "STORE",
+          productStoreGroupId: "GROUP",
+          price: "20",
+          fromDate: latestFromDate
+        },
+        {
+          productPriceTypeId: "DEFAULT_PRICE",
+          productPricePurposeId: "LISTING",
+          currencyUomId: "USD",
+          productStoreId: "STORE",
+          productStoreGroupId: "GROUP",
+          price: "15",
+          fromDate: olderFromDate
+        },
+        {
+          productPriceTypeId: "DEFAULT_PRICE",
+          productPricePurposeId: "LISTING",
+          currencyUomId: "USD",
+          productStoreId: "STORE",
+          productStoreGroupId: "GROUP",
+          price: "10",
+          fromDate: "2026-04-01T00:00:00Z",
+          thruDate: expiredThruDate
+        }
+      ]
+    })
+
+    expect(core.prices.map((price) => price.price)).toEqual([20, 15, 10])
+    expect(core.prices[0]).toMatchObject({
+      productStoreId: "STORE",
+      productStoreGroupId: "GROUP",
+      fromDate: "2025-09-10T09:48:44.927Z",
+      active: true
+    })
+    expect(core.prices[2].active).toBe(false)
+  })
+
   it("prefers the Solr-indexed detail image over legacy image fields", () => {
     const core = normalizeProductCore({
       productId: "P1", detailImageUrl: "http://detail", smallImageUrl: "http://small"

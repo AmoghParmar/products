@@ -7,6 +7,7 @@ export const qk = {
     all: ["products"] as const,
     search: (params: ProductSearchParams) => ["products", "search", params] as const,
     rowSales: (productIds: string[]) => ["products", "rowSales", [...productIds].sort()] as const,
+    documents: (productIds: string[]) => ["products", "documents", [...productIds].sort()] as const,
     tagFacets: (scope: Omit<ProductSearchParams, "tags">) => ["products", "tagFacets", scope] as const,
     groupIdFacets: (scope: Omit<ProductSearchParams, "groupIds">) => ["products", "groupIdFacets", scope] as const
   },
@@ -20,18 +21,32 @@ export const qk = {
     audit: (productId: string) => ["product", productId, "audit"] as const,
     solr: (productId: string) => ["product", productId, "solr"] as const,
     categories: (productId: string) => ["product", productId, "categories"] as const,
-    shopifyShopProducts: (productId: string) => ["product", productId, "shopifyShopProducts"] as const
+    shopifyShopProducts: (productId: string) => ["product", productId, "shopifyShopProducts"] as const,
+    shopifyListingChecks: (productId: string, signature: string) => ["product", productId, "shopifyListingChecks", signature] as const
+  },
+  /** The link pickers' lookups: Shopify search, a typed ID's Shopify data, and which product owns an ID.
+   *  A saved or removed link invalidates the whole subtree, since ownership is not product-scoped. */
+  shopifyLinks: {
+    all: ["shopifyLinks"] as const,
+    candidates: (shopId: string, isVirtual: boolean, term: string) => ["shopifyLinks", "candidates", shopId, isVirtual, term] as const,
+    validation: (shopId: string, product: unknown, shopifyProductId: string) => ["shopifyLinks", "validation", shopId, product, shopifyProductId] as const,
+    owner: (shopId: string, shopifyProductId: string) => ["shopifyLinks", "owner", shopId, shopifyProductId] as const
   },
   catalog: {
     all: ["catalog"] as const,
     list: (resource: string) => ["catalog", resource] as const,
-    features: () => ["catalog", "features"] as const
+    features: () => ["catalog", "features"] as const,
+    categories: (productStoreId: string) => ["catalog", "categories", productStoreId] as const
   },
   quality: {
     all: ["quality"] as const,
     coverage: (ruleIds: string[]) => ["quality", "coverage", [...ruleIds].sort()] as const,
     duplicates: (ruleId: string) => ["quality", "duplicates", ruleId] as const,
     missing: (ruleId: string) => ["quality", "missing", ruleId] as const
+  },
+  productCalendar: {
+    store: (productStoreId: string) => ["productCalendar", productStoreId] as const,
+    list: (productStoreId: string, keyword: string) => ["productCalendar", productStoreId, keyword] as const
   },
   imports: ["imports"] as const,
   indexStatus: ["indexStatus"] as const

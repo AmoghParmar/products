@@ -6,100 +6,171 @@
           <ion-menu-button />
         </ion-buttons>
         <ion-title>{{ translate("Product calendar") }}</ion-title>
-        <ion-button slot="end" fill="clear" :disabled="loading" @click="refresh">
-          <ion-icon slot="icon-only" :icon="refreshOutline" />
-        </ion-button>
+        <ion-buttons slot="end">
+          <ion-button :disabled="loading" @click="refresh">
+            <ion-icon slot="icon-only" :icon="refreshOutline" />
+          </ion-button>
+        </ion-buttons>
+        <ion-progress-bar v-if="loading" type="indeterminate" />
       </ion-toolbar>
     </ion-header>
 
     <ion-content>
-      <main v-if="!calendarProductStoreId" class="empty-page">
-        <EmptyState
-          :title="translate('No product store selected')"
-          :message="translate('Choose a product store to manage product calendar dates.')"
+      <EmptyState
+        v-if="!calendarProductStoreId"
+        :title="translate('No product store selected')"
+        :message="translate('Choose a product store to manage product calendar dates.')"
+      />
+
+      <template v-else>
+        <ion-card>
+          <ion-card-header>
+            <ion-card-subtitle>{{ translate("Shopify metafield mappings") }}</ion-card-subtitle>
+            <ion-card-title>{{ translate("{count} active calendar mappings", { count: activeCalendarMappings.length }) }}</ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            {{ translate("Manage lifecycle date metafield mappings in Company Product Sync.") }}
+          </ion-card-content>
+          <ion-button v-if="mappingManagementHref" fill="clear" :href="mappingManagementHref" target="_blank" rel="noopener noreferrer">
+            {{ translate("Manage Shopify mappings") }}
+            <ion-icon slot="end" :icon="openOutline" />
+          </ion-button>
+        </ion-card>
+
+        <SearchFilterCard
+          :model-value="search"
+          :placeholder="translate('Search by product name or ID')"
+          :debounce="300"
+          @update:model-value="search = $event"
         />
-      </main>
 
-      <main v-else>
-        <div class="page-heading">
-          <div>
-            <p class="overline">{{ calendarProductStoreId }}</p>
-            <h1>{{ translate("Product calendar") }}</h1>
-            <p class="muted">{{ translate("ProductStore-scoped lifecycle dates used by ATP rules.") }}</p>
-          </div>
-        </div>
-
-        <ion-card>
-          <ion-card-header>
-            <ion-card-title>{{ translate("Shopify metafield mappings") }}</ion-card-title>
-            <ion-card-subtitle>{{ translate("Manage lifecycle date metafield mappings in Company Product Sync.") }}</ion-card-subtitle>
-          </ion-card-header>
-          <ion-item>
-            <ion-label>{{ activeCalendarMappings.length }} {{ translate("active calendar mappings") }}</ion-label>
-            <ion-button v-if="mappingManagementHref" slot="end" fill="clear" :href="mappingManagementHref" target="_blank" rel="noopener noreferrer">
-              {{ translate("Manage Shopify mappings") }}
-              <ion-icon slot="end" :icon="openOutline" />
+        <ion-list>
+          <ion-list-header>
+            <ion-checkbox
+              v-if="selectMode"
+              class="ion-margin-end"
+              :checked="allLoadedSelected"
+              :indeterminate="selectedIds.size > 0 && !allLoadedSelected"
+              :aria-label="translate('Select all loaded products')"
+              @ion-change="selectAllLoaded($event.detail.checked)"
+            />
+            <ion-label>
+              <p class="overline">
+                {{ calendarProductStoreId }}
+              </p>
+              {{ resultsLabel }}
+              <p>{{ translate("ProductStore-scoped lifecycle dates used by ATP rules.") }}</p>
+            </ion-label>
+            <ion-button v-if="rows.length" fill="clear" size="small" @click="toggleSelectMode">
+              {{ selectMode ? translate("Done") : translate("Select") }}
             </ion-button>
-          </ion-item>
-        </ion-card>
+          </ion-list-header>
 
-        <ion-card>
-          <ion-card-header>
-            <ion-card-title>{{ translate("Calendar dates") }}</ion-card-title>
-            <ion-card-subtitle>{{ rows.length }} {{ translate("products") }}</ion-card-subtitle>
-          </ion-card-header>
-          <ion-item lines="none">
-            <ion-searchbar v-model="search" :placeholder="translate('Search by product name or ID')" />
-          </ion-item>
-          <ion-list v-if="filteredRows.length">
-            <ion-item v-for="row in filteredRows" :key="`${row.productStoreId}:${row.productId}`">
-              <ion-label>
-                <h2>{{ row.productName || row.internalName || row.productId }}</h2>
-                <p>{{ row.productId }}</p>
-              </ion-label>
-              <div class="date-grid">
-                <span><strong>{{ translate("Introduction") }}</strong>{{ formatDate(row.introductionDate) }}</span>
-                <span><strong>{{ translate("Launch") }}</strong>{{ formatDate(row.releaseDate) }}</span>
-                <span><strong>{{ translate("Support ends") }}</strong>{{ formatDate(row.supportDiscontinuationDate) }}</span>
-                <span><strong>{{ translate("Sales ends") }}</strong>{{ formatDate(row.salesDiscontinuationDate) }}</span>
-              </div>
+          <div
+            v-for="row in rows"
+            :key="`${row.productStoreId}:${row.productId}`"
+            class="list-item calendar-row"
+            role="button"
+            tabindex="0"
+            @click="activateRow(row)"
+            @keydown.enter.prevent="activateRow(row)"
+            @keydown.space.prevent="activateRow(row)"
+          >
+            <ion-item lines="none">
+              <ion-checkbox
+                v-if="selectMode"
+                slot="start"
+                :checked="selectedIds.has(productIdOf(row))"
+                :aria-label="translate('Select product')"
+                @click.stop
+                @keydown.stop
+                @ion-change="setSelected(productIdOf(row), $event.detail.checked)"
+              />
+              <ProductIdentity :product="productOf(row) ?? row" />
             </ion-item>
-          </ion-list>
-          <ion-card-content v-else class="muted">{{ loading ? translate("Loading…") : translate("No calendar rows match the current search.") }}</ion-card-content>
-        </ion-card>
-      </main>
+            <ion-label
+              v-for="(field, index) in PRODUCT_CALENDAR_DATE_FIELDS"
+              :key="field"
+              :class="index < PRODUCT_CALENDAR_DATE_FIELDS.length - 1 ? 'tablet' : 'ion-text-end'"
+            >
+              {{ formatCalendarDate(row[field]) }}
+              <p>{{ translate(PRODUCT_CALENDAR_DATE_LABELS[field]) }}</p>
+            </ion-label>
+          </div>
+
+          <ion-item v-if="!isLoading && !isError && !rows.length" lines="none">
+            <ion-label>{{ translate("No calendar rows match the current search.") }}</ion-label>
+          </ion-item>
+        </ion-list>
+
+        <ErrorState
+          v-if="isError"
+          :title="translate('Unable to load product calendar.')"
+          :message="calendarErrorText"
+          @retry="calendarQuery.refetch()"
+        />
+
+        <ion-infinite-scroll :disabled="!hasNextPage" @ion-infinite="loadMore">
+          <ion-infinite-scroll-content loading-spinner="crescent" />
+        </ion-infinite-scroll>
+      </template>
     </ion-content>
+
+    <ion-footer v-if="selectMode">
+      <ion-toolbar>
+        <ion-title size="small">
+          {{ translate("{count} selected", { count: selectedIds.size }) }}
+        </ion-title>
+        <ion-buttons slot="end">
+          <ion-button fill="outline" :disabled="!selectedIds.size" @click="openDatesEditor(selectedRows)">
+            {{ translate("Edit dates") }}
+          </ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-footer>
   </ion-page>
 </template>
 
 <script setup lang="ts">
+import { translate } from "@common"
 import {
-  IonButton, IonButtons, IonCard, IonCardContent, IonCardHeader, IonCardSubtitle, IonCardTitle,
-  IonContent, IonHeader, IonIcon, IonItem, IonLabel, IonList, IonMenuButton, IonPage, IonSearchbar,
-  IonTitle, IonToolbar
+  IonButton, IonButtons, IonCard, IonCardContent, IonCardHeader, IonCardSubtitle, IonCardTitle, IonCheckbox,
+  IonContent, IonFooter, IonHeader, IonIcon, IonInfiniteScroll, IonInfiniteScrollContent, IonItem, IonLabel, IonList,
+  IonListHeader, IonMenuButton, IonPage, IonProgressBar, IonTitle, IonToolbar, modalController
 } from "@ionic/vue"
+import { useInfiniteQuery, useQueryClient } from "@tanstack/vue-query"
 import { openOutline, refreshOutline } from "ionicons/icons"
-import { DateTime } from "luxon"
 import { computed, ref, watch } from "vue"
 import { useRoute } from "vue-router"
-import { translate } from "@common"
+import { errorMessage } from "@/api/http"
+import { fetchProductCalendarMappings, fetchProductStoreShops } from "@/api/productCalendar"
+import ProductCalendarDatesModal from "@/components/calendar/ProductCalendarDatesModal.vue"
 import EmptyState from "@/components/EmptyState.vue"
+import ErrorState from "@/components/ErrorState.vue"
+import ProductIdentity from "@/components/ProductIdentity.vue"
+import SearchFilterCard from "@/components/SearchFilterCard.vue"
+import { useProductIdentity } from "@/composables/useProductIdentity"
 import {
-  fetchProductCalendar,
-  fetchProductCalendarMappings,
-  fetchProductStoreShops
-} from "@/api/productCalendar"
+  PRODUCT_CALENDAR_DATE_FIELDS, PRODUCT_CALENDAR_DATE_LABELS, type ProductCalendarDatesItem, formatCalendarDate
+} from "@/domain/product/calendar"
+import { qk } from "@/queries/keys"
+import { productCalendarOptions } from "@/queries/productCalendar"
 import { useUserStore } from "@/store/user"
 import { showToast } from "@/utils"
 import { getActiveCalendarMappings, getCalendarMappingManagementHref } from "@/utils/productCalendarMappings"
 
+type CalendarRow = Record<string, unknown>
+
 const route = useRoute()
 const userStore = useUserStore()
-const rows = ref<Record<string, any>[]>([])
+const { identityOf } = useProductIdentity()
+const queryClient = useQueryClient()
 const shops = ref<Record<string, any>[]>([])
 const mappings = ref<Record<string, any>[]>([])
+const mappingsLoading = ref(false)
 const search = ref("")
-const loading = ref(false)
+const selectMode = ref(false)
+const selectedIds = ref(new Set<string>())
 
 const calendarProductStoreId = computed(() => {
   const requestedProductStoreId = route.query.productStoreId
@@ -109,104 +180,151 @@ const calendarProductStoreId = computed(() => {
 })
 const activeCalendarMappings = computed(() => getActiveCalendarMappings(shops.value, mappings.value))
 const mappingManagementHref = computed(() => getCalendarMappingManagementHref(shops.value))
-const filteredRows = computed(() => {
-  const query = search.value.trim().toLowerCase()
 
-  return rows.value.filter((row) => !query || `${row.productId || ""} ${row.productName || ""} ${row.internalName || ""}`.toLowerCase().includes(query))
-})
+const calendarQuery = useInfiniteQuery(computed(() => productCalendarOptions(calendarProductStoreId.value, search.value.trim())))
+const { hasNextPage, isError, isLoading } = calendarQuery
+const pages = computed(() => calendarQuery.data.value?.pages ?? [])
+const rows = computed(() => pages.value.flatMap((page) => page.rows))
+const productsById = computed<Record<string, Record<string, unknown>>>(() => Object.assign({}, ...pages.value.map((page) => page.products)))
+const totalCount = computed(() => pages.value[0]?.totalCount ?? null)
+const resultsLabel = computed(() => totalCount.value === null
+  ? translate("Calendar dates")
+  : translate("{shown} of {count} products", { shown: rows.value.length, count: totalCount.value }))
+const calendarErrorText = computed(() => errorMessage(calendarQuery.error.value, translate("Unable to load product calendar.")))
+const loading = computed(() => mappingsLoading.value || (calendarQuery.isFetching.value && !calendarQuery.isFetchingNextPage.value))
 
-function parseDate(value: unknown) {
-  if(!value) {return null}
-  if (typeof value === "number" || (!isNaN(Number(value)) && !String(value).includes("-") && !String(value).includes(":"))) {
-    const millis = DateTime.fromMillis(Number(value));
-    if (millis.isValid) return millis;
+const allLoadedSelected = computed(() => rows.value.length > 0 && rows.value.every((row) => selectedIds.value.has(productIdOf(row))))
+const selectedRows = computed(() => rows.value.filter((row) => selectedIds.value.has(productIdOf(row))))
+
+function productIdOf(row: CalendarRow) {
+  return String(row.productId ?? "")
+}
+
+function productOf(row: CalendarRow) {
+  return productsById.value[productIdOf(row)]
+}
+
+function imageOf(row: CalendarRow) {
+  return String(productOf(row)?.mainImageUrl ?? "")
+}
+
+
+function toggleSelectMode() {
+  selectMode.value = !selectMode.value
+  if(!selectMode.value) {selectedIds.value = new Set()}
+}
+
+function setSelected(productId: string, checked: boolean) {
+  const next = new Set(selectedIds.value)
+  if(checked) {next.add(productId)} else {next.delete(productId)}
+  selectedIds.value = next
+}
+
+function selectAllLoaded(checked: boolean) {
+  selectedIds.value = checked ? new Set(rows.value.map(productIdOf)) : new Set()
+}
+
+function activateRow(row: CalendarRow) {
+  if(selectMode.value) {
+    setSelected(productIdOf(row), !selectedIds.value.has(productIdOf(row)))
+
+    return
   }
-  const iso = DateTime.fromISO(String(value));
-  if (iso.isValid) return iso;
-  const sql = DateTime.fromSQL(String(value));
-  if (sql.isValid) return sql;
-  return null;
+  openDatesEditor([row])
 }
 
-function formatDate(value: unknown) {
-  const dt = parseDate(value);
-  return dt && dt.isValid ? dt.toLocaleString(DateTime.DATETIME_MED) : "-";
+function toDatesItem(row: CalendarRow): ProductCalendarDatesItem {
+  // The Solr document when the lookup found one, else the calendar row (product ID and name).
+  const { primary, secondary } = identityOf(productOf(row) ?? row)
+
+  return {
+    productId: productIdOf(row),
+    primary,
+    secondary,
+    imageUrl: imageOf(row),
+    dates: Object.fromEntries(PRODUCT_CALENDAR_DATE_FIELDS.map((field) => [field, row[field]]))
+  }
 }
 
-async function refresh() {
+// One editor at a time: a quick second tap on a row must not stack another modal.
+let isEditorOpen = false
+
+async function openDatesEditor(targetRows: CalendarRow[]) {
+  if(!targetRows.length || isEditorOpen) {return}
+
+  isEditorOpen = true
+  try {
+    const modal = await modalController.create({
+      component: ProductCalendarDatesModal,
+      componentProps: { productStoreId: calendarProductStoreId.value, items: targetRows.map(toDatesItem) }
+    })
+    await modal.present()
+    const { data, role } = await modal.onWillDismiss()
+    if(role !== "confirm" || !data?.updated) {return}
+
+    if(selectMode.value) {toggleSelectMode()}
+    await queryClient.invalidateQueries({ queryKey: qk.productCalendar.store(calendarProductStoreId.value) })
+  } finally {
+    isEditorOpen = false
+  }
+}
+
+async function loadMappings() {
   const productStoreId = calendarProductStoreId.value
   if(!productStoreId) {
-    rows.value = []
     shops.value = []
     mappings.value = []
+
     return
   }
 
-  loading.value = true
+  mappingsLoading.value = true
   try {
-    const [calendarRows, productStoreShops, calendarMappings] = await Promise.all([
-      fetchProductCalendar(productStoreId),
+    const [productStoreShops, calendarMappings] = await Promise.all([
       fetchProductStoreShops(productStoreId),
       fetchProductCalendarMappings()
     ])
-    rows.value = calendarRows
     shops.value = productStoreShops
     mappings.value = calendarMappings
   } catch {
-    rows.value = []
     shops.value = []
     mappings.value = []
-    await showToast(translate("Unable to load product calendar."))
+    await showToast(translate("Unable to load Shopify metafield mappings."))
   } finally {
-    loading.value = false
+    mappingsLoading.value = false
   }
 }
 
-watch(calendarProductStoreId, refresh, { immediate: true })
+function refresh() {
+  calendarQuery.refetch()
+  loadMappings()
+}
+
+async function loadMore(event: CustomEvent) {
+  try {
+    if(calendarQuery.hasNextPage.value && !calendarQuery.isFetchingNextPage.value) {await calendarQuery.fetchNextPage()}
+  } finally {
+    (event.target as HTMLIonInfiniteScrollElement).complete()
+  }
+}
+
+// A new search or store replaces the rows; keep only selections that are still on screen.
+watch(rows, (current) => {
+  if(!selectedIds.value.size) {return}
+  const visible = new Set(current.map(productIdOf))
+  selectedIds.value = new Set([...selectedIds.value].filter((productId) => visible.has(productId)))
+})
+
+watch(calendarProductStoreId, loadMappings, { immediate: true })
 </script>
 
 <style scoped>
-main {
-  padding: var(--spacer-base);
-}
-
-.page-heading {
-  margin-block-end: var(--spacer-base);
-}
-
-.page-heading h1 {
-  margin: 0;
-}
-
-.muted {
-  color: var(--ion-color-medium);
-}
-
-.date-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--spacer-xs);
-}
-
-.date-grid span {
-  display: flex;
-  flex-direction: column;
-  color: var(--ion-color-medium);
-}
-
-.date-grid strong {
-  color: var(--ion-color-dark);
-}
-
-.empty-page {
-  height: 100%;
-  display: grid;
-  place-items: center;
-}
-
-@media (max-width: 800px) {
-  .date-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+/* Row grid from @common's .list-item, sized like the Order Manager find-page rows:
+   product plus four dates, with the middle dates from tablet width up. */
+.calendar-row {
+  --columns-desktop: 5;
+  --columns-tablet: 5;
+  border-block-start: var(--border-medium);
+  padding-inline-end: var(--spacer-sm);
 }
 </style>

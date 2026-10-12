@@ -11,71 +11,37 @@
       </ion-button>
     </template>
 
-    <div class="prices-grid">
-      <ion-select
-        v-model="draft.currencyUomId"
-        :label="translate('Currency')"
-        label-placement="stacked"
-        interface="popover"
-        fill="outline"
-        :disabled="!canEdit"
-        :class="{ 'ion-invalid': touched && errors.currencyUomId, 'ion-touched': touched }"
-        :error-text="errors.currencyUomId"
-        @ion-change="touched && validate()"
-      >
-        <ion-select-option
-          v-for="option in currencies"
-          :key="option.id"
-          :value="option.id"
-        >
-          {{ option.label }}
-        </ion-select-option>
-      </ion-select>
+    <p
+      v-if="!rows.length"
+      class="ion-text-center"
+    >
+      {{ translate("No prices in this store group.") }}
+    </p>
 
+    <div
+      v-else
+      class="prices-grid"
+    >
       <ion-input
-        v-model="draft.DEFAULT_PRICE"
-        :label="translate('Default price')"
+        v-for="row in rows"
+        :key="row.key"
+        v-model="draft[row.key]"
+        :label="`${translate(priceTypeLabel(row.productPriceTypeId))} (${row.currencyUomId})`"
         label-placement="stacked"
         fill="outline"
         type="number"
         min="0"
-        clear-input
         :disabled="!canEdit"
-        :class="{ 'ion-invalid': touched && errors.DEFAULT_PRICE, 'ion-touched': touched }"
-        :error-text="errors.DEFAULT_PRICE"
-        @ion-blur="touched && validate()"
-      />
-
-      <ion-input
-        v-model="draft.LIST_PRICE"
-        :label="translate('List price')"
-        label-placement="stacked"
-        fill="outline"
-        type="number"
-        min="0"
-        clear-input
-        :disabled="!canEdit"
-        :class="{ 'ion-invalid': touched && errors.LIST_PRICE, 'ion-touched': touched }"
-        :error-text="errors.LIST_PRICE"
-        @ion-blur="touched && validate()"
-      />
-
-      <ion-input
-        v-model="draft.WHOLESALE_PRICE"
-        :label="translate('Wholesale price')"
-        label-placement="stacked"
-        fill="outline"
-        type="number"
-        min="0"
-        clear-input
-        :disabled="!canEdit"
-        :class="{ 'ion-invalid': touched && errors.WHOLESALE_PRICE, 'ion-touched': touched }"
-        :error-text="errors.WHOLESALE_PRICE"
+        :class="{ 'ion-invalid': touched && errors[row.key], 'ion-touched': touched }"
+        :error-text="errors[row.key]"
         @ion-blur="touched && validate()"
       />
     </div>
 
-    <template #footer>
+    <template
+      v-if="rows.length"
+      #footer
+    >
       <SaveFooter
         :dirty="dirty"
         :saving="saving"
@@ -89,54 +55,28 @@
 </template>
 
 <script setup lang="ts">
-import { IonButton, IonInput, IonSelect, IonSelectOption } from "@ionic/vue"
-import { ref } from "vue"
-import { z } from "zod"
 import { translate } from "@common"
+import { IonButton, IonInput } from "@ionic/vue"
+import { ref } from "vue"
 import CardSection from "@/components/common/CardSection.vue"
 import SaveFooter from "@/components/common/SaveFooter.vue"
-import type { CatalogOption } from "@/domain/types/product"
-
-const PRICE_FIELDS = ["DEFAULT_PRICE", "LIST_PRICE", "WHOLESALE_PRICE"] as const
-type PriceField = typeof PRICE_FIELDS[number]
-
-const positivePrice = z.string().trim().refine(
-  (v) => v === "" || (!isNaN(Number(v)) && Number(v) > 0),
-  { message: "Must be a positive number" }
-)
-
-const pricesSchema = z.object({
-  currencyUomId: z.string(),
-  DEFAULT_PRICE: positivePrice,
-  LIST_PRICE: positivePrice,
-  WHOLESALE_PRICE: positivePrice
-}).superRefine((data, ctx) => {
-  const anyEntered = PRICE_FIELDS.some((f) => (data[f] ?? "").trim() !== "")
-  if(anyEntered && !data.currencyUomId) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Currency is required when a price is set",
-      path: ["currencyUomId"]
-    })
-  }
-})
-
-type PriceErrors = Partial<Record<PriceField | "currencyUomId", string>>
+import { type PriceRow, priceTypeLabel } from "@/domain/product/prices"
 
 const props = withDefaults(defineProps<{
-  draft: {
-    currencyUomId: string
-    DEFAULT_PRICE: string
-    LIST_PRICE: string
-    WHOLESALE_PRICE: string
-  }
-  currencies: CatalogOption[]
+  /** The prices that exist for the store group, plus any copied from the parent and not yet saved.
+   *  A saved price stays until it is replaced. */
+  rows: PriceRow[]
+  /** One value per row, keyed by row key. */
+  draft: Record<string, string>
+  /** The saved value of each existing row, so only the prices being changed are checked. */
+  saved?: Record<string, string>
   dirty: boolean
   saving: boolean
   staleUnderEdit: boolean
   canCopyFromParent?: boolean
   canEdit?: boolean
 }>(), {
+  saved: () => ({}),
   canEdit: true
 })
 
@@ -147,29 +87,29 @@ const emit = defineEmits<{
 }>()
 
 const touched = ref(false)
-const errors = ref<PriceErrors>({})
+const errors = ref<Record<string, string>>({})
+
+// A changed price replaces the saved one and is never cleared, so it needs a positive number. Prices left
+// as they are aren't checked: a saved 0 must not block saving another one.
+const priceError = (value: string | undefined) => {
+  const text = (value ?? "").trim()
+  if(!text) {return translate("Enter a price")}
+
+  return !isNaN(Number(text)) && Number(text) > 0 ? "" : translate("Must be a positive number")
+}
 
 const validate = (): boolean => {
   touched.value = true
-  const result = pricesSchema.safeParse({
-    currencyUomId: props.draft.currencyUomId,
-    DEFAULT_PRICE: props.draft.DEFAULT_PRICE,
-    LIST_PRICE: props.draft.LIST_PRICE,
-    WHOLESALE_PRICE: props.draft.WHOLESALE_PRICE
-  })
-  if(result.success) {
-    errors.value = {}
-
-    return true
-  }
-  const errs: PriceErrors = {}
-  for(const issue of result.error.issues) {
-    const field = issue.path[0] as keyof PriceErrors
-    if(field && !errs[field]) {errs[field] = issue.message}
+  const errs: Record<string, string> = {}
+  for(const row of props.rows) {
+    const draftValue = (props.draft[row.key] ?? "").trim()
+    if(props.saved[row.key] !== undefined && draftValue === props.saved[row.key].trim()) {continue}
+    const error = priceError(props.draft[row.key])
+    if(error) {errs[row.key] = error}
   }
   errors.value = errs
 
-  return false
+  return Object.keys(errs).length === 0
 }
 
 const onSave = () => {

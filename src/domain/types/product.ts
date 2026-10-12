@@ -1,7 +1,12 @@
 /** Core product domain types. Pure data shapes — no Vue, no transport. */
 
 export type ProductKind = "All" | "Variants" | "Virtuals"
-export type ProductSortOption = "Alphabet" | "Updated" | "Created"
+export type ProductSortOption =
+  "IntroducedDesc" | "IntroducedAsc" |
+  "UpdatedDesc" | "UpdatedAsc" |
+  "NameAsc" | "NameDesc" | "Family" |
+  "SkuAsc" | "SkuDesc" |
+  "PriceDesc" | "PriceAsc"
 
 /** Workbench filter state; doubles as the search query-key payload. */
 export interface ProductSearchParams {
@@ -13,6 +18,8 @@ export interface ProductSearchParams {
   groupIds: string[]
   sort: ProductSortOption
   pageSize: number
+  /** Solr field holding the list price for the store in scope; only set for a price sort. */
+  priceField?: string
 }
 
 /** A product row as indexed in the PIM Solr core (flat document, pim owns the shape). */
@@ -37,6 +44,11 @@ export interface ProductSummary {
   createdDate: string
   lastModifiedDate: string
   variantCount: number
+  /** Identifier fields read by the product identifier preference (PRDT_IDEN_PREF). */
+  goodIdentifications: string[]
+  groupId: string
+  groupName: string
+  title: string
 }
 
 export interface ProductSearchPage {
@@ -171,10 +183,18 @@ export interface ProductCategory {
   description: string
 }
 
+/** What the category picker saves: categories newly checked, and the IDs of ones unchecked. */
+export interface CategoryPickerResult {
+  added: ProductCategory[]
+  removedCategoryIds: string[]
+}
+
 export interface ProductPrice {
   productPriceTypeId: string
   productPricePurposeId: string
   currencyUomId: string
+  productStoreId: string
+  productStoreGroupId: string
   price: number
   fromDate: string
   thruDate: string | null
@@ -207,8 +227,11 @@ export interface ProductHistoryEntry {
   oldValue: string
   newValue: string
   changedByUserId: string
+  /** The changing user's display name, when the history service joins it. */
+  changedByName: string
   changedDate: string
   pkPrimaryValue: string
+  pkSecondaryValue: string
 }
 
 export interface ImportHistoryEntry {
@@ -224,6 +247,14 @@ export interface ImportHistoryEntry {
 }
 
 export type PresellState = "preorder" | "backorder" | null
+
+export interface ShopifyShop {
+  shopId: string
+  name: string
+  domain: string
+  /** The shop's main app connection (SystemMessageRemote) for Shopify queries; "" when it has none. */
+  remoteId: string
+}
 
 export interface ShopifyShopProduct {
   shopId: string

@@ -20,11 +20,40 @@ export function escapeSolrValue(value: string): string {
   return value.replace(SOLR_SPECIALS, "\\$&")
 }
 
-export function productSort(sort: ProductSortOption): string {
+export const DEFAULT_PRODUCT_SORT: ProductSortOption = "IntroducedDesc"
+
+/** The indexed list price for a store group and currency: price type, purpose, currency, group.
+ *  Empty when either part is missing or would not make a plain field name. */
+export function listPriceField(productStoreGroupId?: string, currencyUomId?: string): string {
+  const field = `LIST_PRICE_PURCHASE_${currencyUomId}_${productStoreGroupId}_price`
+
+  return productStoreGroupId && currencyUomId && /^\w+$/.test(field) ? field : ""
+}
+
+export function isPriceSort(sort: ProductSortOption): boolean {
+  return sort === "PriceDesc" || sort === "PriceAsc"
+}
+
+/** Solr sort for a workbench sort option. productId breaks ties, so a page boundary never repeats or
+ *  skips a product. A missing value sorts as the lowest, so a price sort keeps unpriced products last. */
+export function productSort(sort: ProductSortOption, priceField = ""): string {
+  const tieBreak = "productId asc"
+  const newestIntroduced = `introductionDate desc, ${tieBreak}`
+
   switch (sort) {
-    case "Updated": return "lastModifiedDate desc"
-    case "Created": return "createdDate desc"
-    default: return "productName asc"
+    case "IntroducedAsc": return `introductionDate asc, ${tieBreak}`
+    case "UpdatedDesc": return `updatedDatetime desc, ${tieBreak}`
+    case "UpdatedAsc": return `updatedDatetime asc, ${tieBreak}`
+    case "NameAsc": return `productName asc, ${tieBreak}`
+    case "NameDesc": return `productName desc, ${tieBreak}`
+    // A virtual and its variants share a groupId; the virtual leads, then its variants by name.
+    case "Family": return `groupId asc, isVirtual desc, productName asc, ${tieBreak}`
+    case "SkuAsc": return `sku asc, ${tieBreak}`
+    case "SkuDesc": return `sku desc, ${tieBreak}`
+    // Without a store price field there is nothing to sort by, so the default order applies.
+    case "PriceDesc": return priceField ? `${priceField} desc, ${tieBreak}` : newestIntroduced
+    case "PriceAsc": return priceField ? `def(${priceField},1e15) asc, ${tieBreak}` : newestIntroduced
+    default: return newestIntroduced
   }
 }
 
@@ -52,7 +81,7 @@ export function workbenchSearchPayload(params: ProductSearchParams, pageIndex: n
   return {
     query: productSearchQueryText(params.queryString),
     filter: productScopeFilters(params),
-    sort: productSort(params.sort),
+    sort: productSort(params.sort, params.priceField),
     limit: params.pageSize,
     offset: pageIndex * params.pageSize,
     params: {
@@ -60,6 +89,37 @@ export function workbenchSearchPayload(params: ProductSearchParams, pageIndex: n
       "q.op": "OR",
       "qf": "productId groupId parentProductName productName internalName sku upc"
     }
+  }
+}
+
+export interface IdentifierCoverageInput {
+  id: string
+  /** A product document field (productId, groupName, ...) rather than a goodIdentifications type. */
+  isDocumentField: boolean
+}
+
+/** One request counting the products that have each identifier: a document field with a value, or a
+ *  goodIdentifications entry other than the "TYPE/null" indexed for an identification saved without
+ *  a value. Facet i<n> counts identifiers[n]; ids that are not plain names are left out. */
+export function identifierCoveragePayload(identifiers: IdentifierCoverageInput[]): SolrJsonQuery {
+  const facet = Object.fromEntries(identifiers.flatMap(({ id, isDocumentField }, index) => {
+    if(!/^\w+$/.test(id)) {return []}
+    const q = isDocumentField ? `${id}:[* TO *]` : `goodIdentifications:${id}/* -goodIdentifications:"${id}/null"`
+
+    return [[`i${index}`, { type: "query", q }]]
+  }))
+
+  return { query: "*:*", filter: ["docType:PRODUCT"], limit: 0, facet }
+}
+
+/** Product documents for a known set of productIds (image and identifiers for rows from other APIs). */
+export function productsByIdPayload(productIds: string[]): SolrJsonQuery {
+  const ids = Array.from(new Set(productIds.filter(Boolean)))
+
+  return {
+    query: "*:*",
+    filter: ["docType:PRODUCT", `productId: (${ids.map((id) => `"${escapeSolrValue(id)}"`).join(" OR ")})`],
+    limit: ids.length
   }
 }
 

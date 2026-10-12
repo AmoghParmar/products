@@ -11,26 +11,22 @@
       </ion-button>
     </template>
 
-    <ion-list lines="full">
-      <ion-item lines="full">
-        <ion-label>
-          <p>{{ translate("Product ID") }}</p>
-        </ion-label>
-        <ion-note slot="end">
+    <ion-list>
+      <ion-item>
+        <ion-label>{{ translate("Product ID") }}</ion-label>
+        <ion-label slot="end">
           {{ productId }}
-        </ion-note>
+        </ion-label>
       </ion-item>
 
       <ion-item
         v-for="row in activeRows"
         :key="rowKey(row)"
       >
-        <ion-label>
-          <p>{{ row.typeDescription }}</p>
-        </ion-label>
-        <ion-note slot="end">
+        <ion-label>{{ row.typeDescription }}</ion-label>
+        <ion-label slot="end">
           {{ row.idValue }}
-        </ion-note>
+        </ion-label>
       </ion-item>
     </ion-list>
 
@@ -48,13 +44,13 @@
 </template>
 
 <script setup lang="ts">
-import { IonButton, IonItem, IonLabel, IonList, IonNote } from "@ionic/vue"
-import { computed, ref } from "vue"
 import { translate } from "@common"
+import { IonButton, IonItem, IonLabel, IonList } from "@ionic/vue"
+import { computed, ref } from "vue"
 import CardSection from "@/components/common/CardSection.vue"
-import IdentificationsModal from "./IdentificationsModal.vue"
-import type { CatalogOption, ProductIdentification } from "@/domain/types/product"
 import type { IdentificationCreate, IdentificationKey } from "@/domain/types/pim"
+import type { CatalogOption, ProductIdentification } from "@/domain/types/product"
+import IdentificationsModal from "./IdentificationsModal.vue"
 
 const props = withDefaults(defineProps<{
   productId: string

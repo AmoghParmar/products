@@ -3,9 +3,12 @@
 export interface PriceEntry {
   productPriceTypeId: string
   currencyUomId: string
-  price: number
+  price?: number
   productPricePurposeId?: string
   productStoreId?: string
+  productStoreGroupId?: string
+  fromDate?: string
+  thruDate?: string
 }
 
 /** PATCH semantics: only send changed fields; empty string clears a field server-side. */

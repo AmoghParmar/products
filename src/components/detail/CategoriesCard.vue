@@ -3,7 +3,7 @@
     <div
       v-if="activeCategories.length"
     >
-      <ion-chip outline v-for="cat in activeCategories" :key="cat.productCategoryId">
+      <ion-chip v-for="cat in activeCategories" :key="cat.productCategoryId" outline>
         {{ cat.categoryName || cat.productCategoryId }}
         <ion-icon v-if="canEdit" :icon="closeOutline" @click="$emit('expire', cat)" />
       </ion-chip>
@@ -22,33 +22,26 @@
       <ion-button
         fill="clear"
         size="small"
-        @click="pickerOpen = true"
+        @click="openPicker"
       >
         <ion-icon
           slot="start"
-          :icon="addOutline"
+          :icon="createOutline"
         />
-        {{ translate("Add category") }}
+        {{ translate("Edit categories") }}
       </ion-button>
     </div>
-
-    <CategoryPicker
-      :is-open="pickerOpen"
-      :exclude-category-ids="activeCategoryIds"
-      @select="onSelect"
-      @dismiss="pickerOpen = false"
-    />
   </CardSection>
 </template>
 
 <script setup lang="ts">
-import { IonButton, IonIcon, IonItem, IonLabel } from "@ionic/vue"
-import { computed, ref } from "vue"
-import { addOutline, closeOutline } from "ionicons/icons"
 import { translate } from "@common"
+import { IonButton, IonChip, IonIcon, modalController } from "@ionic/vue"
+import { closeOutline, createOutline } from "ionicons/icons"
+import { computed } from "vue"
 import CardSection from "@/components/common/CardSection.vue"
+import type { CategoryPickerResult, ProductCategory, ProductCategoryMembership } from "@/domain/types/product"
 import CategoryPicker from "./CategoryPicker.vue"
-import type { ProductCategory, ProductCategoryMembership } from "@/domain/types/product"
 
 const props = withDefaults(defineProps<{
   categories: ProductCategoryMembership[]
@@ -62,16 +55,31 @@ const emit = defineEmits<{
   (event: "expire", membership: ProductCategoryMembership): void
 }>()
 
-const pickerOpen = ref(false)
-
 const activeCategories = computed(() => props.categories.filter((c) => c.active))
 
-const activeCategoryIds = computed(() => activeCategories.value.map((c) => c.productCategoryId))
+// One picker for adding and removing: current categories start checked; saving adds the newly
+// checked ones and removes the unchecked ones.
+let isPickerOpen = false
+async function openPicker() {
+  if(!props.canEdit || isPickerOpen) {return}
 
-const onSelect = (category: ProductCategory) => {
-  pickerOpen.value = false
-  if(!props.canEdit) {return}
-  emit("add", category)
+  isPickerOpen = true
+  try {
+    const modal = await modalController.create({
+      component: CategoryPicker,
+      componentProps: { selectedCategoryIds: activeCategories.value.map((c) => c.productCategoryId) }
+    })
+    await modal.present()
+    const { data, role } = await modal.onWillDismiss<CategoryPickerResult>()
+    if(role !== "confirm" || !data) {return}
+
+    data.added.forEach((category) => emit("add", category))
+    activeCategories.value
+      .filter((membership) => data.removedCategoryIds.includes(membership.productCategoryId))
+      .forEach((membership) => emit("expire", membership))
+  } finally {
+    isPickerOpen = false
+  }
 }
 </script>
 

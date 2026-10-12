@@ -23,9 +23,9 @@ export function useTagMutations(
 
   const invalidate = () => {
     if(isVariant) {
-      queryClient.invalidateQueries({ queryKey: familyKey() })
+      queryClient.invalidateQueries({ queryKey: familyKey(), refetchType: "none" })
     } else {
-      queryClient.invalidateQueries({ queryKey: solrKey() })
+      queryClient.invalidateQueries({ queryKey: solrKey(), refetchType: "none" })
     }
     queryClient.invalidateQueries({ queryKey: qk.products.all, refetchType: "active" })
     triggerSolrIndex(getParentProductId())

@@ -1,6 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/vue-query"
 import { deleteShopifyShopProduct, triggerSolrIndex, upsertShopifyShopProduct } from "@/api/pim"
 import type { ShopifyShopProduct } from "@/domain/types/product"
+
+export interface ShopifyLinkKey { shopId: string; shopifyProductId: string }
+export interface ShopifyLinkPayload extends ShopifyLinkKey { shopifyInventoryItemId: string }
 import { qk } from "@/queries/keys"
 
 export function useShopifyShopProductMutations(productId: () => string, parentProductId: () => string) {
@@ -15,19 +18,23 @@ export function useShopifyShopProductMutations(productId: () => string, parentPr
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: listKey() })
+    // Which product owns a Shopify ID just changed, for every product's pickers.
+    queryClient.invalidateQueries({ queryKey: qk.shopifyLinks.all })
     triggerSolrIndex(parentProductId())
   }
 
+  // A link's key is its shop plus its Shopify ID, so a product can have several links to one shop.
+  const sameLink = (row: { shopId: string; shopifyProductId: string }, key: ShopifyLinkKey) =>
+    row.shopId === key.shopId && row.shopifyProductId === key.shopifyProductId
+
   const upsert = useMutation({
-    mutationFn: (payload: { shopId: string; shopifyProductId: string; shopifyInventoryItemId: string }) =>
-      upsertShopifyShopProduct({ productId: productId(), ...payload }),
+    mutationFn: (payload: ShopifyLinkPayload) => upsertShopifyShopProduct({ productId: productId(), ...payload }),
     onMutate: async (payload) => {
       const previous = await snapshot()
       queryClient.setQueryData<ShopifyShopProduct[]>(listKey(), (rows = []) => {
-        const idx = rows.findIndex((r) => r.shopId === payload.shopId)
         const entry: ShopifyShopProduct = { productId: productId(), ...payload }
 
-        return idx === -1 ? [...rows, entry] : rows.map((r, i) => (i === idx ? entry : r))
+        return rows.some((row) => sameLink(row, payload)) ? rows.map((row) => (sameLink(row, payload) ? entry : row)) : [...rows, entry]
       })
 
       return { previous }
@@ -37,12 +44,10 @@ export function useShopifyShopProductMutations(productId: () => string, parentPr
   })
 
   const remove = useMutation({
-    mutationFn: (shopId: string) => deleteShopifyShopProduct(productId(), shopId),
-    onMutate: async (shopId) => {
+    mutationFn: (key: ShopifyLinkKey) => deleteShopifyShopProduct(productId(), key.shopId, key.shopifyProductId),
+    onMutate: async (key) => {
       const previous = await snapshot()
-      queryClient.setQueryData<ShopifyShopProduct[]>(listKey(), (rows = []) =>
-        rows.filter((r) => r.shopId !== shopId)
-      )
+      queryClient.setQueryData<ShopifyShopProduct[]>(listKey(), (rows = []) => rows.filter((row) => !sameLink(row, key)))
 
       return { previous }
     },
@@ -50,5 +55,15 @@ export function useShopifyShopProductMutations(productId: () => string, parentPr
     onSettled: invalidate
   })
 
-  return { upsert, remove }
+  // A new Shopify ID is a new key: save the new link, then drop the old one. The old link stays if the
+  // save fails, so a failed change never leaves the product unlinked.
+  const replace = useMutation({
+    mutationFn: async ({ from, to }: { from: ShopifyLinkKey; to: ShopifyLinkPayload }) => {
+      await upsertShopifyShopProduct({ productId: productId(), ...to })
+      if(!sameLink(to, from)) {await deleteShopifyShopProduct(productId(), from.shopId, from.shopifyProductId)}
+    },
+    onSettled: invalidate
+  })
+
+  return { upsert, remove, replace }
 }

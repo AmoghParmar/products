@@ -26,6 +26,8 @@ export interface FamilyVariant {
   imageUrl: string
   /** per-axis feature selection, e.g. { Color: "Red", Size: "M" } */
   selection: Record<string, string>
+  /** The member's own row, for the product identifier setting. */
+  product: ProductSummary
 }
 
 /** PIM Solr `featureValues` are "TypeDescription/ValueDescription" tokens (built by the pim doc
@@ -48,7 +50,8 @@ export function familyVariants(members: ProductSummary[]): FamilyVariant[] {
     name: member.productName || member.internalName || member.productId,
     sku: member.sku,
     imageUrl: member.imageUrl,
-    selection: featureSelectionFromValues(member.featureValues)
+    selection: featureSelectionFromValues(member.featureValues),
+    product: member
   }))
   const axes = familyFeatureOptions(members)
 

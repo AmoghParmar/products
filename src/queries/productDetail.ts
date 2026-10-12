@@ -1,17 +1,22 @@
 import { queryOptions } from "@tanstack/vue-query"
-import { fetchAssociations, fetchFeatureApplications, fetchFeatureCatalog, fetchIdentifications, fetchProductCategoryMembers, fetchProductRecord, fetchShopifyShopProducts } from "@/api/pim"
 import { fetchEntityAuditLogs } from "@/api/catalog"
+import { fetchAssociations, fetchFeatureApplications, fetchFeatureCatalog, fetchIdentifications, fetchProductCategoryMembers, fetchProductRecord, fetchShopifyLinkOwners, fetchShopifyShopProducts } from "@/api/pim"
+import { runShopifyGraphql } from "@/api/shopify"
 import { runProductSolrQuery, solrDocs } from "@/api/solr"
-import { escapeSolrValue } from "@/domain/solr/productQuery"
-import { normalizeProductCore, normalizeProductSummary } from "@/domain/normalize/product"
-import type { ProductCategoryMembership, ProductSummary, ShopifyShopProduct } from "@/domain/types/product"
-import { catalogOptionMap , normalizeIdentifications } from "@/domain/normalize/identification"
+import { queryClient } from "@/app/queryClient"
 import { normalizeAssociations } from "@/domain/normalize/association"
 import { featureCatalogMap, normalizeFeatureApplication } from "@/domain/normalize/feature"
 import { normalizeAuditEntry } from "@/domain/normalize/history"
-import { qk } from "./keys"
+import { catalogOptionMap , normalizeIdentifications } from "@/domain/normalize/identification"
+import { normalizeProductCore, normalizeProductSummary } from "@/domain/normalize/product"
+import {
+  type ShopifyLinkCandidate, type ShopifyLinkValidation, candidateSearchRequest, linkValidationRequest, parseCandidates, parseLinkValidation
+} from "@/domain/shopify/linkCandidates"
+import { type ListingCheckProduct, type ShopifyListingCheck, listingCheckRequest, parseListingCheck, shopifyLinkKey } from "@/domain/shopify/listingCheck"
+import { escapeSolrValue } from "@/domain/solr/productQuery"
+import type { ProductCategoryMembership, ProductSummary, ShopifyShop, ShopifyShopProduct } from "@/domain/types/product"
 import { featureTypesOptions, identificationTypesOptions } from "./catalog"
-import { queryClient } from "@/app/queryClient"
+import { qk } from "./keys"
 
 /** Product detail = independent parallel queries. Cards load/fail/refresh on their own; a save
  *  invalidates exactly the slice it touched. The parent/variant segment is a key swap on productId. */
@@ -150,5 +155,103 @@ export function shopifyShopProductsOptions(productId: string) {
         shopifyInventoryItemId: String(raw.shopifyInventoryItemId ?? "")
       }))
     }
+  })
+}
+
+export type ShopifyListingCheckResult = ShopifyListingCheck | { error: string }
+
+/** A live check of each saved Shopify link against Shopify itself, one query per shop through that
+ *  shop's main app connection. A shop that fails is reported on its own; the others still return. */
+export function shopifyListingChecksOptions(params: {
+  productId: string
+  product: ListingCheckProduct
+  links: ShopifyShopProduct[]
+  shops: ShopifyShop[]
+  enabled: boolean
+}) {
+  const { productId, product, links, shops } = params
+  const signature = JSON.stringify([product, links.map((link) => [link.shopId, link.shopifyProductId, link.shopifyInventoryItemId])])
+
+  return queryOptions({
+    queryKey: qk.product.shopifyListingChecks(productId, signature),
+    queryFn: async (): Promise<Record<string, ShopifyListingCheckResult>> => {
+      const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+      const results = await Promise.allSettled(links.map(async (link) => {
+        const remoteId = shops.find((shop) => shop.shopId === link.shopId)?.remoteId
+        if(!remoteId) {throw new Error("This shop has no Shopify connection")}
+        const { queryText, variables } = listingCheckRequest(link, product, since)
+
+        return parseListingCheck(link, product, await runShopifyGraphql(remoteId, queryText, variables))
+      }))
+
+      return Object.fromEntries(links.map((link, index) => {
+        const result = results[index]
+
+        return [shopifyLinkKey(link), result.status === "fulfilled" ? result.value : { error: String(result.reason?.message ?? result.reason) }]
+      }))
+    },
+    enabled: params.enabled && links.length > 0 && shops.length > 0,
+    staleTime: 60_000,
+    retry: false
+  })
+}
+
+/** Which product each Shopify ID is already linked to on a shop, by Shopify ID. */
+async function shopifyLinkOwners(shopId: string, shopifyProductIds: string[]): Promise<Record<string, string>> {
+  const rows = await fetchShopifyLinkOwners(shopId, shopifyProductIds)
+
+  return Object.fromEntries(rows.map((row) => [String(row.shopifyProductId ?? ""), String(row.productId ?? "")]))
+}
+
+/** Shopify variants (products, for a virtual) matching a search on one shop, with the product each is
+ *  already linked to, if any. */
+export function shopifyLinkCandidatesOptions(params: { shopId: string; remoteId: string; product: ListingCheckProduct; term: string; enabled?: boolean }) {
+  const { shopId, remoteId, product, term } = params
+
+  return queryOptions({
+    queryKey: qk.shopifyLinks.candidates(shopId, product.isVirtual, term.trim()),
+    queryFn: async (): Promise<{ candidates: ShopifyLinkCandidate[]; owners: Record<string, string> }> => {
+      const { queryText, variables } = candidateSearchRequest(product, term)
+      const candidates = parseCandidates(product, await runShopifyGraphql(remoteId, queryText, variables))
+
+      return { candidates, owners: await shopifyLinkOwners(shopId, candidates.map((candidate) => candidate.shopifyProductId)) }
+    },
+    enabled: params.enabled !== false && Boolean(shopId && remoteId && term.trim()),
+    staleTime: 30_000,
+    retry: false
+  })
+}
+
+/** What Shopify has for one typed ID on a shop and its 30-day orders. */
+export function shopifyLinkValidationOptions(params: { shopId: string; remoteId: string; product: ListingCheckProduct; shopifyProductId: string; enabled?: boolean }) {
+  const { shopId, remoteId, product } = params
+  const shopifyProductId = params.shopifyProductId.trim()
+
+  return queryOptions({
+    queryKey: qk.shopifyLinks.validation(shopId, product, shopifyProductId),
+    queryFn: async (): Promise<ShopifyLinkValidation> => {
+      const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+      const { queryText, variables } = linkValidationRequest(product, shopifyProductId, since)
+
+      return parseLinkValidation(product, await runShopifyGraphql(remoteId, queryText, variables))
+    },
+    enabled: params.enabled !== false && Boolean(shopId && remoteId && /^\d+$/.test(shopifyProductId)),
+    staleTime: 30_000,
+    retry: false
+  })
+}
+
+/** The product a typed Shopify ID is already linked to on a shop ("" for none). This is an OMS lookup,
+ *  kept apart from the Shopify check so a shop without a connection, or a failing Shopify call, can never
+ *  skip it: saving an owned ID would move the link off its product. */
+export function shopifyLinkOwnerOptions(params: { shopId: string; shopifyProductId: string; enabled?: boolean }) {
+  const { shopId } = params
+  const shopifyProductId = params.shopifyProductId.trim()
+
+  return queryOptions({
+    queryKey: qk.shopifyLinks.owner(shopId, shopifyProductId),
+    queryFn: async () => (await shopifyLinkOwners(shopId, [shopifyProductId]))[shopifyProductId] ?? "",
+    enabled: params.enabled !== false && Boolean(shopId && /^\d+$/.test(shopifyProductId)),
+    retry: false
   })
 }

@@ -8,7 +8,8 @@ const member = (over: Partial<ProductSummary>): ProductSummary => ({
   productId: "", productName: "", internalName: "", brandName: "", productTypeId: "FINISHED_GOOD",
   isVirtual: false, isVariant: true, parentProductId: "TEE", parentProductName: "Tee",
   sku: "", upc: "", tags: [], featureValues: [], primaryProductCategoryId: "", primaryProductCategoryName: "",
-  productStoreIds: [], imageUrl: "", createdDate: "", lastModifiedDate: "", variantCount: 0, ...over
+  productStoreIds: [], imageUrl: "", createdDate: "", lastModifiedDate: "", variantCount: 0,
+  goodIdentifications: [], groupId: "", groupName: "", title: "", ...over
 })
 
 const RED_S = member({ productId: "V1", sku: "T-R-S", featureValues: ["Color/Red", "Size/S"] })

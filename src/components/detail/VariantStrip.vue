@@ -15,19 +15,24 @@
         <ion-thumbnail class="variant-thumb">
           <DxpShopifyImg
             :src="variant.imageUrl"
-            size="thumb"
+            size="small"
           />
         </ion-thumbnail>
-        <span class="variant-name">{{ variant.name }}</span>
-        <span class="variant-sku">{{ variant.sku || variant.productId }}</span>
+        <!-- The same primary and secondary identifiers as every product list (Settings > Product identifier). -->
+        <span class="variant-name">{{ identityOf(variant.product).primary }}</span>
+        <span
+          v-if="identityOf(variant.product).secondary"
+          class="variant-sku"
+        >{{ identityOf(variant.product).secondary }}</span>
       </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { IonThumbnail } from "@ionic/vue"
 import { DxpShopifyImg, translate } from "@common"
+import { IonThumbnail } from "@ionic/vue"
+import { useProductIdentity } from "@/composables/useProductIdentity"
 import type { FamilyVariant } from "@/domain/product/family"
 
 defineProps<{
@@ -36,6 +41,8 @@ defineProps<{
 }>()
 
 defineEmits<{ (event: "select", productId: string): void }>()
+
+const { identityOf } = useProductIdentity()
 </script>
 
 <style scoped>

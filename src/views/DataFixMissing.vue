@@ -73,6 +73,8 @@
           :key="product.productId"
           :product="product"
           :router-link="familyRouteFor(product)"
+          :spark="rowSales[product.productId]"
+          :spark-max="rowSalesMax"
         />
         <EmptyState
           v-if="!drillLoading && !missingProducts.length"
@@ -92,18 +94,19 @@
 </template>
 
 <script setup lang="ts">
+import { translate } from "@common"
 import {
   IonButton, IonButtons, IonCard, IonCardContent, IonCardHeader, IonCardSubtitle, IonContent, IonHeader,
   IonInfiniteScroll, IonInfiniteScrollContent, IonInput, IonLabel, IonList, IonListHeader, IonMenuButton,
   IonPage, IonProgressBar, IonTitle, IonToolbar
 } from "@ionic/vue"
 import { computed, ref } from "vue"
-import { translate } from "@common"
-import CoverageTile from "@/components/quality/CoverageTile.vue"
 import EmptyState from "@/components/EmptyState.vue"
 import ErrorState from "@/components/ErrorState.vue"
+import CoverageTile from "@/components/quality/CoverageTile.vue"
 import ProductRow from "@/components/workbench/ProductRow.vue"
 import { useMissingValues } from "@/composables/useDataQuality"
+import { useRowSales } from "@/composables/useRowSales"
 import { familyRouteFor } from "@/domain/product/family"
 
 const {
@@ -111,6 +114,9 @@ const {
   activeRule, selectRule, lookupField,
   missingProducts, missingTotal, drillLoading, hasNextPage, loadMore
 } = useMissingValues()
+
+// The same 30-day sales as the workbench rows, so the best sellers missing a value stand out.
+const { rowSales, rowSalesMax } = useRowSales(() => missingProducts.value.map((product) => product.productId))
 
 const lookupInput = ref("")
 

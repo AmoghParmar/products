@@ -1,41 +1,44 @@
 <template>
   <ion-card>
-    <ion-card-content>
+    <ion-card-content class="search-filter-card-content">
       <ion-searchbar
-        class="ion-no-padding ion-padding-bottom"
+        class="ion-no-padding"
         :value="modelValue"
         :placeholder="placeholder"
+        :debounce="debounce"
         @ion-input="updateSearch"
       />
 
-      <div class="search-filter-grid">
-        <slot />
+      <template v-if="$slots.default">
+        <div class="search-filter-grid">
+          <slot />
+        </div>
         <ion-button
-          color="danger"
-          slot="icon-only"
+          class="search-filter-clear"
           fill="clear"
+          size="small"
           @click="$emit('clear')"
         >
-          <ion-icon :icon="closeOutline"></ion-icon>
+          {{ translate("Clear filters") }}
         </ion-button>
-      </div>
+      </template>
     </ion-card-content>
   </ion-card>
 </template>
 
 <script setup lang="ts">
+import { translate } from "@common"
 import {
-  IonIcon,
   IonButton,
   IonCard,
   IonCardContent,
   IonSearchbar
 } from "@ionic/vue"
-import { closeOutline } from "ionicons/icons";
 
 defineProps<{
   modelValue: string
   placeholder: string
+  debounce?: number
 }>()
 
 const emit = defineEmits<{
@@ -49,16 +52,28 @@ function updateSearch(event: CustomEvent) {
 </script>
 
 <style scoped>
-.search-filter-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(140px, 1fr)) max-content max-content;
-  gap: 12px;
-  align-items: center;
+/* Same layout as the Order Manager find pages: search on top, then a uniform grid of
+   stacked outline filters that wraps on its own, with "Clear filters" at the end. */
+.search-filter-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacer-sm);
+  padding: var(--spacer-sm);
 }
 
-@media (max-width: 640px) {
-  .search-filter-grid {
-    grid-template-columns: 1fr;
-  }
+.search-filter-grid {
+  display: grid;
+  gap: var(--spacer-sm);
+  grid-template-columns: repeat(auto-fill, minmax(min(16rem, 100%), 1fr));
+}
+
+.search-filter-grid :slotted(ion-select),
+.search-filter-grid :slotted(ion-input) {
+  min-width: 0;
+  width: 100%;
+}
+
+.search-filter-clear {
+  align-self: flex-end;
 }
 </style>

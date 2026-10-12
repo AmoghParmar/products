@@ -84,6 +84,8 @@
         </div>
       </div>
       <section>
+        <DxpProductIdentifier />
+
         <ion-card>
           <ion-card-header>
             <ion-card-title>{{ translate("Timezone") }}</ion-card-title>
@@ -224,6 +226,7 @@ import { computed, onBeforeMount, ref } from "vue"
 import { commonUtil, cookieHelper, translate } from "@common"
 import { useAuth } from "@common/composables/useAuth"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query"
+import DxpProductIdentifier from "@/components/settings/DxpProductIdentifier.vue"
 import { qk } from "@/queries/keys"
 import { useToast } from "@/composables/useToast"
 import { useUserStore } from "@/store/user"

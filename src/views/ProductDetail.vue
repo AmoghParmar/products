@@ -137,23 +137,28 @@
         />
 
         <PricesCard
+          :rows="priceRows"
           :draft="priceDraft.draft"
-          :currencies="currencies"
+          :saved="priceSource"
           :dirty="priceDraft.dirty.value"
           :saving="pricesSaving"
           :stale-under-edit="priceDraft.staleUnderEdit.value"
           :can-copy-from-parent="segment === 'variant' && hasParent"
           :can-edit="canEditProduct"
           @save="onSavePrices"
-          @reset="priceDraft.reset"
+          @reset="resetPrices"
           @copy-from-parent="onCopyPricesFromParent"
         />
 
         <ShopifyShopProductsCard
           :shopify-shop-products="shopifyShopProducts"
-          :saving="shopifyMutations.upsert.isPending.value || shopifyMutations.remove.isPending.value"
+          :product-id="editingProductId"
+          :product="shopifyListingProduct"
+          :product-ready="shopifyListingProductReady"
+          :saving="shopifyMutations.upsert.isPending.value || shopifyMutations.remove.isPending.value || shopifyMutations.replace.isPending.value"
           :can-edit="canEditProduct"
           @upsert="onUpsertShopifyShopProduct"
+          @replace="onReplaceShopifyShopProduct"
           @remove="onRemoveShopifyShopProduct"
         />
 
@@ -186,7 +191,10 @@
           @copy-from-parent="copyShippingFromParent"
         />
 
-        <HistoryCard :entries="audit" />
+        <HistoryCard
+          :entries="audit"
+          :identification-type-labels="identificationTypeLabels"
+        />
 
         <AddVariantModal
           :is-open="addVariantModalOpen"
@@ -254,15 +262,16 @@ import { useAssociationMutations } from "@/mutations/useAssociationMutations"
 import { useFeatureMutations } from "@/mutations/useFeatureMutations"
 import { useTagMutations } from "@/mutations/useTagMutations"
 import { useCategoryMutations } from "@/mutations/useCategoryMutations"
-import { useShopifyShopProductMutations } from "@/mutations/useShopifyShopProductMutations"
+import { type ShopifyLinkKey, type ShopifyLinkPayload, useShopifyShopProductMutations } from "@/mutations/useShopifyShopProductMutations"
 import { triggerSolrIndex, updateProductFields } from "@/api/pim"
 import { useToast } from "@/composables/useToast"
-import { currencyUomOptions, featureTypesOptions, identificationTypesOptions, lengthUomOptions, weightUomOptions } from "@/queries/catalog"
+import { featureTypesOptions, identificationTypesOptions, lengthUomOptions, weightUomOptions } from "@/queries/catalog"
 import { productCoreOptions } from "@/queries/productDetail"
 import { useCardDraft } from "@/composables/useCardDraft"
 import { ASSOC_TYPE } from "@/domain/normalize/association"
 import { FEATURE_APPL_TYPE } from "@/domain/normalize/feature"
 import { productDisplayName } from "@/domain/normalize/product"
+import { DEFAULT_PRICE_PURPOSE, type PriceRow, activePricesForRow, priceRowsForStoreGroup, purposeForNewPrice } from "@/domain/product/prices"
 import type { FeatureAxis, ProductAssociation, ProductCategory, ProductCategoryMembership, ProductCore, ProductFeatureApplication, ProductPrice, ProductSummary } from "@/domain/types/product"
 import type { IdentificationCreate, IdentificationKey } from "@/domain/types/pim"
 import { useUserStore } from "@/store/user"
@@ -299,7 +308,7 @@ const {
   variants, selectedVariantId, selectVariant,
   featureOptions, hasFeatureSelection, selectedVariantSelection, selectByFeature,
   core, coreLoading, coreError, coreErrorValue, refetchCore,
-  identifications, associationGroups,
+  identifications, identificationsLoading, associationGroups,
   familyFeatureAxes, editingFeatureAxes, featureFamilyId,
   audit, productTypes, boxTypes,
   anchorTags, selectedVariantTags,
@@ -317,69 +326,84 @@ const categoryMutations = useCategoryMutations(() => editingProductId.value, () 
 const shopifyMutations = useShopifyShopProductMutations(() => editingProductId.value, () => parentProductId.value)
 
 // ---------- prices ----------
-const PRICE_TYPES = ["DEFAULT_PRICE", "LIST_PRICE", "WHOLESALE_PRICE"] as const
-type PriceType = typeof PRICE_TYPES[number]
+// A price belongs to a store group, not a single store. The prices that already exist for the
+// selected store's group are shown, one per price type and currency. The only way to add one is to
+// copy the parent's prices onto a variant; the copied rows stay listed until they are saved or reset.
+const storeCurrencyUomId = computed(() => currentProductStore.value.defaultCurrencyUomId || currentProductStore.value.currencyUomId)
+const copiedPriceRows = ref<PriceRow[]>([])
+const storeGroupPriceRows = computed(() => priceRowsForStoreGroup(prices.value, currentProductStore.value.primaryStoreGroupId, storeCurrencyUomId.value))
+const priceRows = computed(() => {
+  const base = storeGroupPriceRows.value
+  const baseKeys = new Set(base.map((row) => row.key))
+  const additions = copiedPriceRows.value.filter((row) => !baseKeys.has(row.key))
+
+  return [...base, ...additions]
+})
+
+const expirePricePayload = (price: ProductPrice, thruDate: string) => ({
+  productPriceTypeId: price.productPriceTypeId,
+  currencyUomId: price.currencyUomId,
+  productPricePurposeId: price.productPricePurposeId || DEFAULT_PRICE_PURPOSE,
+  productStoreId: price.productStoreId || currentProductStore.value.productStoreId,
+  productStoreGroupId: price.productStoreGroupId || currentProductStore.value.primaryStoreGroupId,
+  fromDate: price.fromDate,
+  thruDate
+})
 
 const priceSource = computed(() => {
-  const active = prices.value.filter((p: ProductPrice) => p.active)
+  const entries = storeGroupPriceRows.value.map((row) => [row.key, row.price.price.toString()])
 
-  return {
-    currencyUomId: active[0]?.currencyUomId ?? "USD",
-    DEFAULT_PRICE: active.find((p: ProductPrice) => p.productPriceTypeId === "DEFAULT_PRICE")?.price?.toString() ?? "",
-    LIST_PRICE: active.find((p: ProductPrice) => p.productPriceTypeId === "LIST_PRICE")?.price?.toString() ?? "",
-    WHOLESALE_PRICE: active.find((p: ProductPrice) => p.productPriceTypeId === "WHOLESALE_PRICE")?.price?.toString() ?? ""
-  }
+  return Object.fromEntries(entries) as Record<string, string>
 })
 
 const priceDraft = useCardDraft(priceSource)
 const pricesSaving = ref(false)
 
-// When switching between parent and variant, force-reset the draft so stale edits
-// from the previous product don't keep dirty=true on the new one.
-watch(editingProductId, () => priceDraft.reset())
+const resetPrices = () => {
+  priceDraft.reset()
+  copiedPriceRows.value = []
+}
+
+// When switching between parent and variant, or to a store in another store group, force-reset the
+// draft so stale edits and copied rows from the previous one don't carry over.
+watch([editingProductId, () => currentProductStore.value.productStoreId], () => resetPrices())
 
 const onSavePrices = async () => {
   if(!canEditProduct.value) {return}
   if(pricesSaving.value) {return}
   pricesSaving.value = true
   try {
-    const activePrices = prices.value.filter((p: ProductPrice) => p.active)
     const now = new Date().toISOString()
+    const productStoreGroupId = currentProductStore.value.primaryStoreGroupId
 
-    const pricePayload = PRICE_TYPES
-      .map((type) => {
-        const draftVal = (priceDraft.draft[type as PriceType] ?? "").trim()
-        const savedVal = (priceSource.value[type as PriceType] ?? "").trim()
-        if(draftVal === savedVal) return null
-        if(draftVal) {
-          return {
-            productPriceTypeId: type,
-            currencyUomId: priceDraft.draft.currencyUomId,
-            price: Number(draftVal),
-            productPricePurposeId: "LISTING",
-            productStoreId: currentProductStore.value.productStoreId,
-            productStoreGroupId: currentProductStore.value.primaryStoreGroupId
-          }
-        }
-        const existing = activePrices.find((p: ProductPrice) => p.productPriceTypeId === type)
-        if(!existing) return null
-        return {
-          productPriceTypeId: type,
-          currencyUomId: existing.currencyUomId,
-          productPricePurposeId: "LISTING",
+    // Only shown prices are edited: each changed one is retired and replaced, keeping its purpose.
+    const pricePayload = priceRows.value.flatMap((row) => {
+      const draftVal = (priceDraft.draft[row.key] ?? "").trim()
+      if(!draftVal || draftVal === (priceSource.value[row.key] ?? "").trim()) {return []}
+
+      const replacedPrices = activePricesForRow(prices.value, row.productPriceTypeId, row.currencyUomId, productStoreGroupId)
+
+      return [
+        ...replacedPrices.map((price) => expirePricePayload(price, now)),
+        {
+          productPriceTypeId: row.productPriceTypeId,
+          currencyUomId: row.currencyUomId,
+          price: Number(draftVal),
+          productPricePurposeId: purposeForNewPrice(replacedPrices.length ? replacedPrices : [row.price]),
           productStoreId: currentProductStore.value.productStoreId,
-          productStoreGroupId: currentProductStore.value.primaryStoreGroupId,
-          thruDate: now
+          productStoreGroupId
         }
-      })
-      .filter(Boolean)
+      ]
+    })
 
-    if(!pricePayload.length) return
+    if(!pricePayload.length) {return}
 
     await updateProductFields(editingProductId.value, { prices: pricePayload })
 
     triggerSolrIndex(editingProductId.value, { indexVariants: false })
     await queryClient.invalidateQueries({ queryKey: qk.product.core(editingProductId.value) })
+    // The refetched prices now hold what was saved: reseed so the copied rows and draft clear together.
+    resetPrices()
     toast.success(translate("Prices saved"))
   } catch(error) {
     toast.error(error, translate("Could not save prices"))
@@ -392,11 +416,16 @@ const onCopyPricesFromParent = async () => {
   if(!canEditProduct.value) {return}
   if(!parentProductId.value) {return}
   const parent = await queryClient.ensureQueryData(productCoreOptions(parentProductId.value))
-  const active = parent.prices.filter((p) => p.active)
-  priceDraft.draft.currencyUomId = active[0]?.currencyUomId ?? priceDraft.draft.currencyUomId
-  priceDraft.draft.DEFAULT_PRICE = active.find((p) => p.productPriceTypeId === "DEFAULT_PRICE")?.price?.toString() ?? ""
-  priceDraft.draft.LIST_PRICE = active.find((p) => p.productPriceTypeId === "LIST_PRICE")?.price?.toString() ?? ""
-  priceDraft.draft.WHOLESALE_PRICE = active.find((p) => p.productPriceTypeId === "WHOLESALE_PRICE")?.price?.toString() ?? ""
+  const parentRows = priceRowsForStoreGroup(parent.prices, currentProductStore.value.primaryStoreGroupId, storeCurrencyUomId.value)
+  if(!parentRows.length) {
+    toast.error(null, translate("Parent product has no prices in this store group."))
+
+    return
+  }
+  copiedPriceRows.value = parentRows
+  for(const parentRow of parentRows) {
+    priceDraft.draft[parentRow.key] = parentRow.price.price.toString()
+  }
 }
 
 // tags on the anchor (virtual) product
@@ -437,13 +466,24 @@ const onExpireCategory = (mem: ProductCategoryMembership) => {
 }
 
 // ---------- shopify shop products ----------
-const onUpsertShopifyShopProduct = (payload: { shopId: string; shopifyProductId: string; shopifyInventoryItemId: string }) => {
+// What the live Shopify check needs: a variant is matched by its SKU, a virtual through one of its variants.
+const shopifyListingProduct = computed(() => ({
+  sku: identifications.value.find((row) => row.active && row.goodIdentificationTypeId === "SKU")?.idValue ?? "",
+  isVirtual: Boolean(core.value?.isVirtual),
+  childSku: variants.value.find((variant) => variant.sku)?.sku ?? ""
+}))
+const shopifyListingProductReady = computed(() => core.value?.productId === editingProductId.value && !identificationsLoading.value)
+const onUpsertShopifyShopProduct = (payload: ShopifyLinkPayload) => {
   if(!canEditProduct.value) {return}
   shopifyMutations.upsert.mutateAsync(payload).catch((error) => toast.error(error, translate("Could not save Shopify shop product")))
 }
-const onRemoveShopifyShopProduct = (shopId: string) => {
+const onReplaceShopifyShopProduct = (change: { from: ShopifyLinkKey; to: ShopifyLinkPayload }) => {
   if(!canEditProduct.value) {return}
-  shopifyMutations.remove.mutateAsync(shopId).catch((error) => toast.error(error, translate("Could not remove Shopify shop product")))
+  shopifyMutations.replace.mutateAsync(change).catch((error) => toast.error(error, translate("Could not save Shopify shop product")))
+}
+const onRemoveShopifyShopProduct = (key: ShopifyLinkKey) => {
+  if(!canEditProduct.value) {return}
+  shopifyMutations.remove.mutateAsync(key).catch((error) => toast.error(error, translate("Could not remove Shopify shop product")))
 }
 // feature edits apply to whichever family member is being edited
 const featureMutations = useFeatureMutations(() => editingProductId.value, () => parentProductId.value)
@@ -454,12 +494,16 @@ const identificationTypesQuery = useQuery(identificationTypesOptions())
 const featureTypesQuery = useQuery(featureTypesOptions())
 const lengthUomsQuery = useQuery(lengthUomOptions())
 const weightUomsQuery = useQuery(weightUomOptions())
-const currenciesQuery = useQuery(currencyUomOptions())
 const identificationTypes = computed(() => identificationTypesQuery.data.value ?? [])
+// Labels for the history: the type list, plus the descriptions this product's own identifications carry
+// (SKU, for one, is not in the type list).
+const identificationTypeLabels = computed<Record<string, string>>(() => ({
+  ...Object.fromEntries(identifications.value.map((row) => [row.goodIdentificationTypeId, row.typeDescription || row.goodIdentificationTypeId])),
+  ...Object.fromEntries(identificationTypes.value.map((option) => [option.id, option.label]))
+}))
 const featureTypes = computed(() => featureTypesQuery.data.value ?? [])
 const lengthUoms = computed(() => lengthUomsQuery.data.value ?? [])
 const weightUoms = computed(() => weightUomsQuery.data.value ?? [])
-const currencies = computed(() => currenciesQuery.data.value ?? [])
 
 const coreErrorText = computed(() => errorMessage(coreErrorValue.value, translate("Could not load this product")))
 

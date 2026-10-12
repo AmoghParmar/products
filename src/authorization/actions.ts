@@ -16,5 +16,7 @@ export default {
   APP_FEATURE_REMOVE: "PIM_FEATURE_ADMIN",
   APP_DUPLICATE_RESOLUTION: "PIM_PRODUCT_ADMIN",
   APP_SEARCH_REINDEX: "SEARCH_UPDATE OR SEARCH_ADMIN",
-  APP_COMMON_ADMIN: "COMMON_ADMIN"
+  APP_COMMON_ADMIN: "COMMON_ADMIN",
+  // PRDT_IDEN_PREF is a ProductStore-wide setting other apps read too, so it needs the admin permission.
+  APP_PRODUCT_IDENTIFIER_UPDATE: "COMMON_ADMIN"
 } as const satisfies Record<string, string>

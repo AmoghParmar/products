@@ -1,7 +1,7 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/vue-query"
 import { runProductSolrQuery, solrDocs, solrTotal } from "@/api/solr"
 import { normalizeProductSummary } from "@/domain/normalize/product"
-import { groupIdFacetPayload, rowSalesAnalyticsPayload, tagFacetPayload, workbenchSearchPayload } from "@/domain/solr/productQuery"
+import { groupIdFacetPayload, productsByIdPayload, rowSalesAnalyticsPayload, tagFacetPayload, workbenchSearchPayload } from "@/domain/solr/productQuery"
 import type { ProductSearchPage, ProductSearchParams, RowSalesSpark, TagFacet } from "@/domain/types/product"
 import { qk } from "./keys"
 
@@ -90,6 +90,29 @@ export function rowSalesAnalyticsOptions(productIds: string[]) {
     staleTime: 60_000,
     retry: false
   })
+}
+
+/** Cached product documents for lists whose own API carries only IDs and a name (associations). */
+export function productDocumentsOptions(productIds: string[]) {
+  const ids = Array.from(new Set(productIds.filter(Boolean))).sort()
+
+  return queryOptions({
+    queryKey: qk.products.documents(ids),
+    queryFn: () => fetchProductsById(ids),
+    enabled: ids.length > 0,
+    staleTime: 5 * 60_000
+  })
+}
+
+/** Product documents by productId, for rows whose own API returns only IDs. The raw documents are
+ *  kept (not normalized) because identifier preferences also read their goodIdentifications. */
+export async function fetchProductsById(productIds: string[]): Promise<Record<string, Record<string, unknown>>> {
+  const ids = Array.from(new Set(productIds.filter(Boolean)))
+  if(!ids.length) {return {}}
+
+  const response = await runProductSolrQuery(productsByIdPayload(ids))
+
+  return Object.fromEntries(solrDocs(response).map((doc) => [String(doc.productId ?? ""), doc]))
 }
 
 function salesWindowStartIso(windowDays: number): string {

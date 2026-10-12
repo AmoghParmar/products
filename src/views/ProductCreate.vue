@@ -478,12 +478,6 @@
             </ion-button>
           </ion-item>
         </ion-list>
-        <CategoryPicker
-          :is-open="categoryPickerOpen"
-          :exclude-category-ids="selectedCategoryIds"
-          @select="addCategory"
-          @dismiss="categoryPickerOpen = false"
-        />
       </div>
 
       <!-- Prices -->
@@ -655,7 +649,6 @@ import router from "../router"
 import { useQuery } from "@tanstack/vue-query"
 import { emitter, translate } from "@common"
 import { closeOutline } from "ionicons/icons"
-import CategoryPicker from "@/components/detail/CategoryPicker.vue"
 import DimensionBox from "@/components/detail/DimensionBox.vue"
 import ProductPicker from "@/components/detail/ProductPicker.vue"
 import FeaturesSection from "@/components/detail/FeaturesSection.vue"
@@ -823,7 +816,6 @@ const draftedPrices = ref({
 })
 const selectedCategories = ref<ProductCategory[]>([])
 const categories = ref();
-const categoryPickerOpen = ref(false)
 const variants = ref<ProductSummary[]>([])
 const pickerOpen = ref(false)
 const creating = ref(false)
@@ -833,7 +825,6 @@ const priceUomId = ref("USD")
 const steps = ["display", "tags", "dates", "shipping", "inventoryPolicy", "identifications", "categories", "prices", "features"]
 
 const variantIds = computed(() => variants.value.map((v) => v.productId))
-const selectedCategoryIds = computed(() => selectedCategories.value.map((c) => c.productCategoryId))
 const progress = computed(() => steps.findIndex((s) => s === step.value) / 10)
 
 // Tags

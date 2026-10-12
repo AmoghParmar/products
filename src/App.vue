@@ -14,12 +14,13 @@
 
 <script setup lang="ts">
 import { IonApp, IonRouterOutlet, IonSplitPane, loadingController } from "@ionic/vue"
-import { computed, onMounted, onUnmounted, ref } from "vue"
+import { computed, onMounted, onUnmounted, ref, watch } from "vue"
 import { Settings } from "luxon"
 import { FastTravel, translate } from "@common"
 
 import Menu from "@/components/Menu.vue"
 import emitter from "@/event-bus"
+import { useProductIdentificationStore } from "@/store/productIdentification"
 import { useUserStore } from "@/store/user"
 
 import router from "./router"
@@ -27,6 +28,13 @@ import router from "./router"
 const loader = ref<HTMLIonLoadingElement | null>(null)
 const userStore = useUserStore()
 const userProfile = computed(() => userStore.getUserProfile)
+const productIdentificationStore = useProductIdentificationStore()
+
+// Product rows read the current ProductStore's identifier preference, so load it whenever the store changes.
+// No store (logged out, or "None") resets it to the default rather than keeping the last store's.
+watch(() => userStore.getCurrentProductStore?.productStoreId, (productStoreId) => {
+  productIdentificationStore.fetchProductIdentificationPref(productStoreId ?? "")
+}, { immediate: true })
 
 async function presentLoader(options: { message?: string, backdropDismiss?: boolean } = { message: "", backdropDismiss: true }) {
   if(options.message && loader.value) {dismissLoader()}
