@@ -132,7 +132,7 @@
 </template>
 
 <script setup lang="ts">
-import { translate } from "@common"
+import { commonUtil, logger, translate } from "@common"
 import {
   IonButton, IonButtons, IonCard, IonCardContent, IonCardHeader, IonCardSubtitle, IonCardTitle, IonCheckbox,
   IonContent, IonFooter, IonHeader, IonIcon, IonInfiniteScroll, IonInfiniteScrollContent, IonItem, IonLabel, IonList,
@@ -286,10 +286,12 @@ async function loadMappings() {
     ])
     shops.value = productStoreShops
     mappings.value = calendarMappings
-  } catch {
+  } catch(err) {
     shops.value = []
     mappings.value = []
-    await showToast(translate("Unable to load Shopify metafield mappings."))
+    const serverError = commonUtil.getErrorMessage(err);
+    logger.error(err);
+    await showToast(`${translate("Unable to load Shopify metafield mappings.")} ${serverError}`)
   } finally {
     mappingsLoading.value = false
   }

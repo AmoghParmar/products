@@ -1,9 +1,8 @@
 import { DateTime, Settings } from "luxon"
 import { defineStore } from "pinia"
-import { api, commonUtil, cookieHelper, translate } from "@common"
+import { api, commonUtil, cookieHelper, logger, translate } from "@common"
 import { useAuth } from "@common/composables/useAuth"
 
-import logger from "@/logger"
 import { showToast } from "@/utils"
 import Actions from "@/authorization/actions"
 
@@ -72,7 +71,8 @@ export const useUserStore = defineStore("user", {
         this.oms = cookieHelper().get("oms") || '';
         this.fetchStatus.profile = "success"
       } catch (error: any) {
-        await showToast(translate("Failed to fetch user profile information"))
+        const serverError = commonUtil.getErrorMessage(error);
+        await showToast(`${translate("Failed to fetch user profile information")}. ${serverError}`)
         logger.error("Failed to fetch user profile information", error)
         useAuth().clearAuth()
         this.fetchStatus.profile = "error"
@@ -182,8 +182,9 @@ export const useUserStore = defineStore("user", {
 
         return tzId
       } catch (error: any) {
+        const serverError = commonUtil.getErrorMessage(error);
         logger.error("Failed to update time zone", error)
-        await showToast(translate("Failed to update time zone"))
+        await showToast(`${translate("Failed to update time zone")}. ${serverError}`)
 
         return Promise.reject(error)
       }

@@ -5,6 +5,7 @@ import type {
 } from "@/domain/types/pim"
 import { useUserStore } from "@/store/user"
 import { request, responseList } from "./http"
+import { logger } from "@common"
 
 /** All calls against the oms component (/rest/s1/oms/...) — writes plus the reference reads it owns. */
 
@@ -24,7 +25,7 @@ export function triggerSolrIndex(
       indexVariants: options.indexVariants ?? true
     }
   }).catch((error) => {
-    console.error("Failed to index product in Solr:", error)
+    logger.error("Failed to index product in Solr:", error)
   })
 }
 

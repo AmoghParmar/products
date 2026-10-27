@@ -85,7 +85,7 @@
 </template>
 
 <script setup lang="ts">
-import { DxpShopifyImg, translate } from "@common"
+import { DxpShopifyImg, commonUtil, logger, translate } from "@common"
 import {
   IonButton, IonButtons, IonContent, IonDatetime, IonFab, IonFabButton, IonHeader, IonIcon, IonItem, IonLabel,
   IonList, IonPopover, IonSpinner, IonThumbnail, IonTitle, IonToolbar, modalController
@@ -183,9 +183,19 @@ async function save() {
     saving.value = false
   }
 
-  const updated = results.filter((result) => result.status === "fulfilled").length
+  let updated = 0
+  let failedReason: any = undefined
+  for(const result of results) {
+    if(result.status === "fulfilled") {
+      updated++
+    } else if(!failedReason) {
+      failedReason = result.reason
+    }
+  }
   if(!updated) {
-    await showToast(translate("Unable to update calendar dates."))
+    const serverError = commonUtil.getErrorMessage(failedReason)
+    logger.error("Unable to update calendar dates", failedReason)
+    await showToast(`${translate("Unable to update calendar dates.")} ${serverError}`)
 
     return
   }

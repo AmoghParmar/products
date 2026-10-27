@@ -1,4 +1,4 @@
-import { translate } from "@common"
+import { commonUtil, logger, translate } from "@common"
 import { defineStore } from "pinia"
 import { fetchGoodIdentificationTypes, fetchProductIdentificationSetting, storeProductIdentificationSetting } from "@/api/productIdentification"
 import { runProductSolrQuery, solrDocs, solrTotal } from "@/api/solr"
@@ -7,7 +7,6 @@ import {
   type ProductIdentificationOption, type ProductIdentificationPref, parseProductIdentificationPref
 } from "@/domain/product/identification"
 import { identifierCoveragePayload } from "@/domain/solr/productQuery"
-import logger from "@/logger"
 import { showToast } from "@/utils"
 
 // The store whose preference was asked for last: a slower answer for a store already left is dropped.
@@ -61,8 +60,9 @@ export const useProductIdentificationStore = defineStore("productIdentification"
         await save
         await showToast(translate("Product Store setting updated successfully."))
       } catch (error) {
+        const serverError = commonUtil.getErrorMessage(error);
         logger.error("Failed to update the product identifier setting", error)
-        await showToast(translate("Failed to update Product Store setting."))
+        await showToast(`${translate("Failed to update Product Store setting.")} ${serverError}`);
         // Show what the store really has, so the select matches it and the choice can be made again.
         await pendingSave
         await this.fetchProductIdentificationPref(productStoreId)

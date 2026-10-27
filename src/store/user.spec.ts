@@ -14,6 +14,12 @@ const commonUtilMock = vi.hoisted(() => ({
 vi.mock("@common", () => ({
   api: vi.fn(),
   commonUtil: commonUtilMock,
+  logger: {
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn()
+  },
   translate: (message: string) => message
 }))
 
