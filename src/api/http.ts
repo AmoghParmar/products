@@ -1,4 +1,4 @@
-import { api } from "@common"
+import { api, commonUtil } from "@common"
 
 
 /** Thin transport over @common api(). All app endpoints (pim/, oms/, admin/) live under the same
@@ -22,15 +22,12 @@ export async function request<T = any>(config: HttpRequest): Promise<T> {
 
 /** Server error → a single human message. Moqui REST errors arrive as {errorCode, errors}. */
 export function errorMessage(error: unknown, fallback = "Something went wrong"): string {
-  const err = error as any
+  const serverError = commonUtil.getErrorMessage(error)
+  if(serverError && fallback) {
+    return `${fallback}. ${serverError}`
+  }
 
-  return (
-    err?.response?.data?.errors ||
-    err?.response?.data?.errorMessage ||
-    err?.response?.data?._ERROR_MESSAGE_ ||
-    err?.message ||
-    fallback
-  )
+  return serverError || fallback
 }
 
 /** Moqui entity-list REST responses are either bare arrays or {listName: [...]}-style wrappers. */

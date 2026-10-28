@@ -1,5 +1,5 @@
 import { toastController } from "@ionic/vue"
-import { errorMessage } from "@/api/http"
+import { commonUtil, logger } from "@common"
 
 /** One toast surface for the app; mutations route success/error feedback through here. */
 export function useToast() {
@@ -10,7 +10,16 @@ export function useToast() {
 
   return {
     success: (message: string) => show(message, "success"),
-    error: (error: unknown, fallback?: string) => show(errorMessage(error, fallback), "danger"),
+    error: (error: unknown, fallback?: string) => {
+      if(error) {
+        logger.error(fallback || "Error", error)
+      }
+      const serverError = commonUtil.getErrorMessage(error)
+      const message = fallback
+        ? `${fallback}${serverError ? `. ${serverError}` : ""}`
+        : serverError
+      return show(message, "danger")
+    },
     info: (message: string) => show(message)
   }
 }
